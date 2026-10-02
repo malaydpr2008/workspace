@@ -14,6 +14,7 @@ import {
   X,
   LayoutGrid,
   User,
+  FileUp,
 } from 'lucide-react';
 import { WorkspaceNode, Shot } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -27,6 +28,7 @@ import { DocumentExportButton } from '@/components/export/DocumentExportButton';
 import { StoryboardReelModal } from '@/components/storyboard/StoryboardReelModal';
 import { BeatBoardView } from '@/components/views/BeatBoardView';
 import { CharacterSidesModal } from '@/components/export/CharacterSidesModal';
+import { ScriptImportModal } from '@/components/modals/ScriptImportModal';
 
 interface ScreenplayViewProps {
   node: WorkspaceNode;
@@ -57,6 +59,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [isReelOpen, setIsReelOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'editor' | 'board'>('editor');
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // New shot form state
   const [isAddingShot, setIsAddingShot] = useState(false);
@@ -318,6 +321,16 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           >
             <User className="w-3.5 h-3.5" />
             <span>Actor Sides</span>
+          </button>
+
+          {/* Import Fountain Script Button */}
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-mono font-medium transition-all"
+            title="Import Fountain script text or file"
+          >
+            <FileUp className="w-3.5 h-3.5" />
+            <span>Import Fountain</span>
           </button>
 
           {/* Export Dropdown */}
@@ -918,6 +931,17 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         onClose={() => setIsSidesModalOpen(false)}
         screenplayNode={node}
         scenes={scenes}
+      />
+
+      {/* Script Import Modal */}
+      <ScriptImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        screenplayNode={node}
+        onImportComplete={(firstSceneId) => {
+          setUserSelectedSceneId(firstSceneId);
+          setViewMode('editor');
+        }}
       />
     </div>
   );

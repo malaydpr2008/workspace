@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { WorkspaceSidebar } from './tree/WorkspaceSidebar';
 import { NodeDispatcher } from './NodeDispatcher';
+import { CommandPalette } from './navigation/CommandPalette';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
 interface WorkspaceShellProps {
@@ -53,6 +54,9 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950">
         <NodeDispatcher />
       </main>
+
+      {/* Global Universal Command Palette (CMD+K / Ctrl+K) */}
+      <CommandPalette />
     </div>
   );
 };
