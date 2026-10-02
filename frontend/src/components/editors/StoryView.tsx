@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   BookOpen,
   Bookmark,
@@ -9,6 +9,9 @@ import {
   AlignLeft,
   ChevronRight,
   Sparkles,
+  Plus,
+  Trash2,
+  Check,
 } from 'lucide-react';
 import { WorkspaceNode } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -18,7 +21,16 @@ interface StoryViewProps {
 }
 
 export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
-  const { nodes, childrenMap, loadNodeChildren } = useWorkspaceStore();
+  const {
+    nodes,
+    childrenMap,
+    loadNodeChildren,
+    updateNodeContent,
+    updateNodeTitle,
+    insertBlock,
+    deleteNode,
+    saveStatus,
+  } = useWorkspaceStore();
 
   const isChapter = node.type === 'chapter';
 
@@ -31,6 +43,7 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
   }, [isChapter, node, childrenMap, nodes]);
 
   const [userSelectedChapterId, setUserSelectedChapterId] = useState<string | null>(null);
+  const inputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   const activeChapterId = isChapter
     ? node.id
@@ -55,6 +68,36 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
   const allText = paragraphs.map((p) => p.content || '').join(' ');
   const wordCount = allText.trim() ? allText.trim().split(/\s+/).length : 0;
   const readingTimeMin = Math.max(1, Math.ceil(wordCount / 200));
+
+  const focusParagraph = (paraId: string) => {
+    setTimeout(() => {
+      inputRefs.current[paraId]?.focus();
+    }, 50);
+  };
+
+  const handleAddParagraph = async (afterId: string | null = null) => {
+    if (!currentChapter) return;
+    const newPara = await insertBlock(currentChapter.id, 'paragraph', afterId, '');
+    if (newPara) {
+      focusParagraph(newPara.id);
+    }
+  };
+
+  const handleKeyDown = async (
+    e: React.KeyboardEvent<HTMLTextAreaElement>,
+    para: WorkspaceNode,
+    idx: number
+  ) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      await handleAddParagraph(para.id);
+    } else if (e.key === 'Backspace' && !para.content) {
+      e.preventDefault();
+      const prev = paragraphs[idx - 1];
+      await deleteNode(para.id);
+      if (prev) focusParagraph(prev.id);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
@@ -86,11 +129,31 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
           </div>
         </div>
 
-        {/* Stats Pill */}
-        <div className="flex items-center space-x-3 text-xs bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
-          <div className="flex items-center space-x-1 text-violet-400 font-mono">
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>Target: {node.properties?.target_words?.toLocaleString() || '80,000'} words</span>
+        {/* Stats & Save Status */}
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-1.5 text-xs font-mono">
+            {saveStatus === 'saving' && (
+              <span className="flex items-center space-x-1.5 text-amber-400">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span>Saving...</span>
+              </span>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="flex items-center space-x-1.5 text-emerald-400">
+                <Check className="w-3.5 h-3.5" />
+                <span>Saved</span>
+              </span>
+            )}
+            {saveStatus === 'idle' && (
+              <span className="text-slate-500 text-[11px]">Synced</span>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-3 text-xs bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+            <div className="flex items-center space-x-1 text-violet-400 font-mono">
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Target: {node.properties?.target_words?.toLocaleString() || '80,000'} words</span>
+            </div>
           </div>
         </div>
       </div>
@@ -127,7 +190,7 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
           )}
         </div>
 
-        {/* Prose Reading Canvas */}
+        {/* Prose Reading & Editing Canvas */}
         <div className="flex-1 overflow-y-auto p-8 lg:p-16 bg-slate-950 flex justify-center">
           <div className="max-w-2xl w-full space-y-8">
             {/* Story Title & Chapter Banner */}
@@ -135,51 +198,101 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
               <span className="text-xs font-mono tracking-widest text-violet-400 uppercase">
                 {node.title}
               </span>
-              <h2 className="text-3xl font-serif text-slate-100 font-semibold tracking-normal">
-                {currentChapter?.title || 'Chapter 1'}
-              </h2>
+              {currentChapter ? (
+                <input
+                  type="text"
+                  value={currentChapter.title}
+                  onChange={(e) => updateNodeTitle(currentChapter.id, e.target.value)}
+                  placeholder="Chapter Title..."
+                  className="w-full text-center text-3xl font-serif text-slate-100 font-semibold tracking-normal bg-transparent focus:outline-none border-b border-transparent focus:border-violet-500/40 pb-1"
+                />
+              ) : (
+                <h2 className="text-3xl font-serif text-slate-100 font-semibold">Chapter 1</h2>
+              )}
               <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-violet-500 to-transparent mx-auto mt-4" />
             </div>
 
             {/* Paragraph Blocks */}
             <div className="space-y-6 text-slate-300 font-serif text-lg leading-relaxed antialiased">
               {paragraphs.length === 0 ? (
-                <div className="p-12 text-center border border-dashed border-slate-800 rounded-xl text-slate-500 font-sans text-xs">
+                <div className="p-12 text-center border border-dashed border-slate-800 rounded-xl text-slate-500 font-sans text-xs space-y-3">
                   <AlignLeft className="w-6 h-6 mx-auto mb-2 text-slate-600" />
-                  No paragraphs in this chapter yet. Add paragraph nodes to craft your story.
+                  <p>No paragraphs in this chapter yet.</p>
+                  <button
+                    onClick={() => handleAddParagraph(null)}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded text-xs font-sans font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add First Paragraph</span>
+                  </button>
                 </div>
               ) : (
-                paragraphs.map((para, idx) => {
-                  const isFirst = idx === 0;
-                  const content = para.content || '';
-                  const firstLetter = content.charAt(0);
-
-                  return (
-                    <div
-                      key={para.id}
-                      className="group relative p-3 -mx-3 rounded-lg hover:bg-slate-900/30 transition-colors"
-                    >
-                      {isFirst && firstLetter ? (
-                        <p className="first-letter:float-left first-letter:text-5xl first-letter:pr-3 first-letter:font-serif first-letter:text-violet-400 first-letter:leading-none">
-                          {content}
-                        </p>
-                      ) : (
-                        <p>{content}</p>
-                      )}
+                paragraphs.map((para, idx) => (
+                  <div key={para.id} className="group relative -mx-4 p-4 rounded-xl hover:bg-slate-900/40 transition-all">
+                    {/* Delete and quick action buttons */}
+                    <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1 font-sans">
+                      <button
+                        onClick={() => handleAddParagraph(para.id)}
+                        className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        title="Insert paragraph below"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => deleteNode(para.id)}
+                        className="p-1 rounded bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-500"
+                        title="Delete paragraph"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  );
-                })
+
+                    <textarea
+                      ref={(el) => {
+                        inputRefs.current[para.id] = el;
+                      }}
+                      value={para.content}
+                      onChange={(e) => updateNodeContent(para.id, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, para, idx)}
+                      placeholder="Write your story prose here..."
+                      rows={Math.max(2, para.content.split('\n').length)}
+                      className="w-full bg-transparent resize-none font-serif text-lg leading-relaxed text-slate-200 focus:outline-none placeholder-slate-600"
+                    />
+
+                    {/* Quick "+" insertion line between paragraphs on hover */}
+                    <div className="relative h-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-slate-800" />
+                      </div>
+                      <div className="relative flex justify-center">
+                        <button
+                          onClick={() => handleAddParagraph(para.id)}
+                          className="px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-[10px] font-sans text-slate-400 hover:text-violet-300 hover:border-violet-500 flex items-center space-x-1"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          <span>Insert Paragraph</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
 
             {/* Chapter Footer / Progress */}
             {paragraphs.length > 0 && (
-              <div className="pt-12 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500 font-sans">
+              <div className="pt-8 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500 font-sans">
                 <span className="flex items-center space-x-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-violet-400" />
                   <span>End of Chapter</span>
                 </span>
-                <span>{paragraphs.length} paragraph blocks</span>
+                <button
+                  onClick={() => handleAddParagraph(paragraphs[paragraphs.length - 1]?.id)}
+                  className="flex items-center space-x-1 px-3 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-violet-300 transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add Paragraph</span>
+                </button>
               </div>
             )}
           </div>

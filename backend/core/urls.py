@@ -14,6 +14,7 @@ router.register(r"nodes", WorkspaceNodeViewSet, basename="workspacenode")
 router.register(r"characters", CharacterViewSet, basename="character")
 router.register(r"shots", ShotViewSet, basename="shot")
 router.register(r"shot-coverages", ShotBlockCoverageViewSet, basename="shotblockcoverage")
+router.register(r"shot-coverage", ShotBlockCoverageViewSet, basename="shotcoverage")
 
 urlpatterns = [
     path("", include(router.urls)),

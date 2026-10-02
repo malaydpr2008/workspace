@@ -6,10 +6,11 @@ import {
   Clock,
   Tag,
   Calendar,
-  Share2,
-  Bookmark,
   Layers,
   Sparkles,
+  Plus,
+  Trash2,
+  Check,
 } from 'lucide-react';
 import { WorkspaceNode } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -19,7 +20,15 @@ interface ArticleViewProps {
 }
 
 export const ArticleView: React.FC<ArticleViewProps> = ({ node }) => {
-  const { nodes, childrenMap } = useWorkspaceStore();
+  const {
+    nodes,
+    childrenMap,
+    updateNodeContent,
+    updateNodeTitle,
+    insertBlock,
+    deleteNode,
+    saveStatus,
+  } = useWorkspaceStore();
 
   const childIds = childrenMap[node.id] || [];
   const childBlocks = childIds
@@ -33,6 +42,15 @@ export const ArticleView: React.FC<ArticleViewProps> = ({ node }) => {
     day: 'numeric',
     year: 'numeric',
   });
+
+  const handleAddSection = async (type: 'heading' | 'paragraph') => {
+    await insertBlock(
+      node.id,
+      type,
+      childBlocks[childBlocks.length - 1]?.id || null,
+      ''
+    );
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-y-auto">
@@ -54,17 +72,30 @@ export const ArticleView: React.FC<ArticleViewProps> = ({ node }) => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 text-xs text-slate-400">
-          <span className="flex items-center space-x-1 font-mono">
+        {/* Live Auto-save indicator & Stats */}
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-1.5 text-xs font-mono">
+            {saveStatus === 'saving' && (
+              <span className="flex items-center space-x-1.5 text-amber-400">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span>Saving...</span>
+              </span>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="flex items-center space-x-1.5 text-emerald-400">
+                <Check className="w-3.5 h-3.5" />
+                <span>Saved</span>
+              </span>
+            )}
+            {saveStatus === 'idle' && (
+              <span className="text-slate-500 text-[11px]">Synced</span>
+            )}
+          </div>
+
+          <span className="flex items-center space-x-1 font-mono text-xs text-slate-400">
             <Clock className="w-3.5 h-3.5 text-amber-400" />
             <span>{readingTime} min read</span>
           </span>
-          <button className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-            <Bookmark className="w-4 h-4" />
-          </button>
-          <button className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-            <Share2 className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -86,10 +117,14 @@ export const ArticleView: React.FC<ArticleViewProps> = ({ node }) => {
               ))}
             </div>
 
-            {/* Title */}
-            <h1 className="text-3xl lg:text-4xl font-extrabold text-white tracking-tight leading-tight">
-              {node.title || 'Universal Composite Node Architectures'}
-            </h1>
+            {/* Editable Title */}
+            <input
+              type="text"
+              value={node.title}
+              onChange={(e) => updateNodeTitle(node.id, e.target.value)}
+              placeholder="Article Title..."
+              className="w-full text-3xl lg:text-4xl font-extrabold text-white tracking-tight leading-tight bg-transparent focus:outline-none border-b border-transparent focus:border-emerald-500/40 pb-2"
+            />
 
             {/* Publishing Metadata Card */}
             <div className="flex items-center justify-between pt-2 text-xs text-slate-400">
@@ -117,38 +152,78 @@ export const ArticleView: React.FC<ArticleViewProps> = ({ node }) => {
             </div>
           </header>
 
-          {/* Lead Abstract / Content */}
-          {node.content && (
-            <div className="p-6 rounded-2xl bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800 shadow-xl">
-              <div className="flex items-center space-x-2 text-xs font-mono text-emerald-400 uppercase tracking-widest mb-3">
+          {/* Lead Abstract / Content (Editable) */}
+          <div className="p-6 rounded-2xl bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800 shadow-xl space-y-2">
+            <div className="flex items-center justify-between text-xs font-mono text-emerald-400 uppercase tracking-widest mb-1">
+              <div className="flex items-center space-x-2">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Abstract & Overview</span>
               </div>
-              <p className="text-lg text-slate-200 font-light leading-relaxed">
-                {node.content}
-              </p>
             </div>
-          )}
+            <textarea
+              value={node.content}
+              onChange={(e) => updateNodeContent(node.id, e.target.value)}
+              placeholder="Write the executive abstract or editorial introduction..."
+              rows={Math.max(3, node.content.split('\n').length)}
+              className="w-full bg-transparent resize-none text-lg text-slate-200 font-light leading-relaxed focus:outline-none placeholder-slate-600"
+            />
+          </div>
 
           {/* Child Paragraphs / Blocks if any */}
-          {childBlocks.length > 0 && (
-            <div className="space-y-6 pt-4">
-              {childBlocks.map((block) => (
-                <div key={block.id} className="space-y-2">
-                  {block.title && (
-                    <h3 className="text-xl font-bold text-white tracking-tight">
-                      {block.title}
-                    </h3>
-                  )}
-                  {block.content && (
-                    <p className="text-base text-slate-300 leading-relaxed font-normal">
-                      {block.content}
-                    </p>
-                  )}
+          <div className="space-y-6 pt-2">
+            {childBlocks.map((block) => (
+              <div
+                key={block.id}
+                className="group relative -mx-4 p-4 rounded-xl hover:bg-slate-900/40 transition-all space-y-2"
+              >
+                <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
+                  <button
+                    onClick={() => deleteNode(block.id)}
+                    className="p-1 rounded bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-500"
+                    title="Delete section"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {block.type === 'heading' ? (
+                  <input
+                    type="text"
+                    value={block.title || block.content}
+                    onChange={(e) => updateNodeTitle(block.id, e.target.value)}
+                    placeholder="Section Heading..."
+                    className="w-full text-xl font-bold text-white tracking-tight bg-transparent focus:outline-none"
+                  />
+                ) : (
+                  <textarea
+                    value={block.content}
+                    onChange={(e) => updateNodeContent(block.id, e.target.value)}
+                    placeholder="Article body paragraph..."
+                    rows={Math.max(2, block.content.split('\n').length)}
+                    className="w-full bg-transparent resize-none text-base text-slate-300 leading-relaxed font-normal focus:outline-none"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Add Section Buttons */}
+          <div className="flex items-center space-x-3 pt-4 border-t border-slate-800/60">
+            <button
+              onClick={() => handleAddSection('paragraph')}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-emerald-400 text-xs font-medium transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Paragraph</span>
+            </button>
+            <button
+              onClick={() => handleAddSection('heading')}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-medium transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Subheading</span>
+            </button>
+          </div>
 
           {/* Single Table Universal Pattern Info Card */}
           <div className="p-6 rounded-xl bg-slate-900/30 border border-dashed border-slate-800 text-xs text-slate-400 space-y-2 font-mono">

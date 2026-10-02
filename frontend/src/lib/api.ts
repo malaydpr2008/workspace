@@ -87,3 +87,45 @@ export async function fetchCharacters(workspaceId?: string): Promise<Character[]
   return handleResponse<Character[]>(res);
 }
 
+export async function deleteNode(nodeId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/nodes/${nodeId}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete node failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function createShot(shotData: Partial<Shot>): Promise<Shot> {
+  const res = await fetch(`${API_BASE_URL}/shots/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(shotData),
+  });
+  return handleResponse<Shot>(res);
+}
+
+export async function createShotCoverage(
+  shotId: string,
+  blockId: string,
+  orderIndex: number = 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/shot-coverages/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      shot: shotId,
+      block: blockId,
+      order_index: orderIndex,
+    }),
+  });
+  return handleResponse(res);
+}
+
+

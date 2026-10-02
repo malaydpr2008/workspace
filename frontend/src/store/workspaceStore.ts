@@ -6,7 +6,14 @@ import {
   fetchShots,
   fetchCharacters,
   createNode,
+  updateNode,
+  deleteNode as apiDeleteNode,
+  createShot,
+  createShotCoverage,
 } from '@/lib/api';
+
+const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
 interface WorkspaceState {
   currentWorkspace: Workspace | null;
@@ -18,6 +25,7 @@ interface WorkspaceState {
   characters: Record<string, Character>;
   shotsByScene: Record<string, Shot[]>;
   isLoading: boolean;
+  saveStatus: 'idle' | 'saving' | 'saved';
   error: string | null;
 
   // Actions
@@ -31,6 +39,43 @@ interface WorkspaceState {
     title: string,
     parentId?: string | null
   ) => Promise<WorkspaceNode | null>;
+  updateNodeContent: (nodeId: string, content: string) => void;
+  updateNodeTitle: (nodeId: string, title: string) => void;
+  updateNodeProperties: (
+    nodeId: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    properties: Record<string, any>
+  ) => Promise<void>;
+  changeBlockType: (
+    nodeId: string,
+    newType: WorkspaceNode['type'],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    properties?: Record<string, any>
+  ) => Promise<void>;
+  insertBlock: (
+    parentId: string,
+    type: WorkspaceNode['type'],
+    afterNodeId?: string | null,
+    initialContent?: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    properties?: Record<string, any>
+  ) => Promise<WorkspaceNode | null>;
+  deleteNode: (nodeId: string) => Promise<void>;
+  createSceneShot: (
+    sceneId: string,
+    shotData: {
+      shot_number: string;
+      shot_type: string;
+      lens: string;
+      duration_seconds: number;
+      storyboard_url?: string;
+    }
+  ) => Promise<Shot | null>;
+  attachBlockToShot: (
+    shotId: string,
+    blockId: string,
+    sceneId: string
+  ) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -43,6 +88,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   characters: {},
   shotsByScene: {},
   isLoading: false,
+  saveStatus: 'idle',
   error: null,
 
   loadWorkspace: async (slug: string) => {
@@ -59,7 +105,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         return;
       }
 
-      // Fetch root nodes and characters in parallel
       const [rootNodes, characterList] = await Promise.all([
         fetchNodes(workspace.id, null),
         fetchCharacters(workspace.id).catch(() => [] as Character[]),
@@ -78,7 +123,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         characterMap[char.id] = char;
       });
 
-      // Default select first root node
       const firstRootId = rootIds[0] || null;
 
       set({
@@ -90,7 +134,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         isLoading: false,
       });
 
-      // Prefetch children of root nodes for a responsive experience
       if (firstRootId) {
         await get().selectNode(firstRootId);
       }
@@ -123,11 +166,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         },
       });
 
-      // If any child is a scene, prefetch shots for it
+      // Prefetch shots for scenes and load grandChildren
       for (const child of children) {
         if (child.type === 'scene') {
           get().loadSceneShots(child.id);
-          // Also prefetch dialogue/action children of scene
           fetchNodes(currentWorkspace.id, child.id).then((grandChildren) => {
             const currentNodes = get().nodes;
             const updated = { ...currentNodes };
@@ -180,21 +222,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const targetNode = nodes[nodeId];
     if (!targetNode) return;
 
-    // Auto-expand if selecting a parent node
     if (!expandedNodeIds.includes(nodeId)) {
       set({ expandedNodeIds: [...expandedNodeIds, nodeId] });
     }
 
-    // Load children if not already present
     if (!childrenMap[nodeId]) {
       await loadNodeChildren(nodeId);
     }
 
-    // If node is a scene, load shots
     if (targetNode.type === 'scene') {
       await loadSceneShots(nodeId);
     } else if (targetNode.type === 'screenplay') {
-      // Load scenes and scene blocks
       const sceneIds = get().childrenMap[nodeId] || [];
       for (const sceneId of sceneIds) {
         loadSceneShots(sceneId);
@@ -203,7 +241,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         }
       }
     } else if (targetNode.type === 'story') {
-      // Load chapters and chapter blocks
       const chapterIds = get().childrenMap[nodeId] || [];
       for (const chapterId of chapterIds) {
         if (!get().childrenMap[chapterId]) {
@@ -272,6 +309,248 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch (err: unknown) {
       console.error('Failed to create new node', err);
       return null;
+    }
+  },
+
+  updateNodeContent: (nodeId: string, content: string) => {
+    const { nodes } = get();
+    const existing = nodes[nodeId];
+    if (!existing) return;
+
+    // Optimistically update
+    set({
+      nodes: {
+        ...nodes,
+        [nodeId]: { ...existing, content },
+      },
+      saveStatus: 'saving',
+    });
+
+    if (debounceTimers[nodeId]) {
+      clearTimeout(debounceTimers[nodeId]);
+    }
+
+    debounceTimers[nodeId] = setTimeout(async () => {
+      try {
+        await updateNode(nodeId, { content });
+        set({ saveStatus: 'saved' });
+
+        if (saveStatusTimer) clearTimeout(saveStatusTimer);
+        saveStatusTimer = setTimeout(() => {
+          set({ saveStatus: 'idle' });
+        }, 1500);
+      } catch (err) {
+        console.error('Failed to save content for node', nodeId, err);
+      }
+    }, 400);
+  },
+
+  updateNodeTitle: (nodeId: string, title: string) => {
+    const { nodes } = get();
+    const existing = nodes[nodeId];
+    if (!existing) return;
+
+    set({
+      nodes: {
+        ...nodes,
+        [nodeId]: { ...existing, title },
+      },
+      saveStatus: 'saving',
+    });
+
+    if (debounceTimers[`${nodeId}-title`]) {
+      clearTimeout(debounceTimers[`${nodeId}-title`]);
+    }
+
+    debounceTimers[`${nodeId}-title`] = setTimeout(async () => {
+      try {
+        await updateNode(nodeId, { title });
+        set({ saveStatus: 'saved' });
+
+        if (saveStatusTimer) clearTimeout(saveStatusTimer);
+        saveStatusTimer = setTimeout(() => {
+          set({ saveStatus: 'idle' });
+        }, 1500);
+      } catch (err) {
+        console.error('Failed to save title for node', nodeId, err);
+      }
+    }, 400);
+  },
+
+  updateNodeProperties: async (nodeId, properties) => {
+    const { nodes } = get();
+    const existing = nodes[nodeId];
+    if (!existing) return;
+
+    const merged = { ...existing.properties, ...properties };
+    set({
+      nodes: {
+        ...nodes,
+        [nodeId]: { ...existing, properties: merged },
+      },
+      saveStatus: 'saving',
+    });
+
+    try {
+      await updateNode(nodeId, { properties: merged });
+      set({ saveStatus: 'saved' });
+      setTimeout(() => set({ saveStatus: 'idle' }), 1200);
+    } catch (err) {
+      console.error('Failed to update properties', nodeId, err);
+    }
+  },
+
+  changeBlockType: async (nodeId, newType, properties = {}) => {
+    const { nodes } = get();
+    const existing = nodes[nodeId];
+    if (!existing) return;
+
+    const updatedProps = { ...existing.properties, ...properties };
+    set({
+      nodes: {
+        ...nodes,
+        [nodeId]: { ...existing, type: newType, properties: updatedProps },
+      },
+      saveStatus: 'saving',
+    });
+
+    try {
+      await updateNode(nodeId, { type: newType, properties: updatedProps });
+      set({ saveStatus: 'saved' });
+      setTimeout(() => set({ saveStatus: 'idle' }), 1200);
+    } catch (err) {
+      console.error('Failed to change block type', nodeId, err);
+    }
+  },
+
+  insertBlock: async (
+    parentId,
+    type,
+    afterNodeId = null,
+    initialContent = '',
+    properties = {}
+  ) => {
+    const { currentWorkspace, childrenMap, nodes } = get();
+    if (!currentWorkspace) return null;
+
+    const childIds = childrenMap[parentId] || [];
+    let rank = `0|h${Date.now()}:`;
+
+    if (afterNodeId) {
+      const idx = childIds.indexOf(afterNodeId);
+      const afterNode = nodes[afterNodeId];
+      if (afterNode) {
+        rank = `${afterNode.rank}h${Math.floor(Math.random() * 1000)}:`;
+      }
+      if (idx !== -1 && idx < childIds.length - 1) {
+        const nextNode = nodes[childIds[idx + 1]];
+        if (nextNode && afterNode) {
+          rank = `${afterNode.rank.replace(/:$/, '')}_${nextNode.rank}`;
+        }
+      }
+    }
+
+    try {
+      const created = await createNode({
+        workspace: currentWorkspace.id,
+        parent: parentId,
+        type,
+        title: '',
+        content: initialContent,
+        rank,
+        properties,
+      });
+
+      const nextChildIds = [...childIds];
+      if (afterNodeId) {
+        const idx = childIds.indexOf(afterNodeId);
+        if (idx !== -1) {
+          nextChildIds.splice(idx + 1, 0, created.id);
+        } else {
+          nextChildIds.push(created.id);
+        }
+      } else {
+        nextChildIds.push(created.id);
+      }
+
+      set((state) => ({
+        nodes: { ...state.nodes, [created.id]: created },
+        childrenMap: {
+          ...state.childrenMap,
+          [parentId]: nextChildIds,
+        },
+        saveStatus: 'saved',
+      }));
+
+      setTimeout(() => set({ saveStatus: 'idle' }), 1000);
+      return created;
+    } catch (err) {
+      console.error('Failed to insert block', err);
+      return null;
+    }
+  },
+
+  deleteNode: async (nodeId: string) => {
+    const { nodes, childrenMap, rootNodeIds } = get();
+    const target = nodes[nodeId];
+    if (!target) return;
+
+    const parentId = target.parent;
+
+    const nextNodes = { ...nodes };
+    delete nextNodes[nodeId];
+
+    const nextRootNodeIds = rootNodeIds.filter((id) => id !== nodeId);
+
+    let nextChildrenMap = { ...childrenMap };
+    if (parentId && childrenMap[parentId]) {
+      nextChildrenMap = {
+        ...nextChildrenMap,
+        [parentId]: childrenMap[parentId].filter((id) => id !== nodeId),
+      };
+    }
+
+    set({
+      nodes: nextNodes,
+      rootNodeIds: nextRootNodeIds,
+      childrenMap: nextChildrenMap,
+      selectedNodeId:
+        get().selectedNodeId === nodeId
+          ? parentId || nextRootNodeIds[0] || null
+          : get().selectedNodeId,
+      saveStatus: 'saving',
+    });
+
+    try {
+      await apiDeleteNode(nodeId);
+      set({ saveStatus: 'saved' });
+      setTimeout(() => set({ saveStatus: 'idle' }), 1000);
+    } catch (err) {
+      console.error('Failed to delete node', nodeId, err);
+    }
+  },
+
+  createSceneShot: async (sceneId, shotData) => {
+    try {
+      const shot = await createShot({
+        scene: sceneId,
+        ...shotData,
+      });
+
+      await get().loadSceneShots(sceneId);
+      return shot;
+    } catch (err) {
+      console.error('Failed to create shot', err);
+      return null;
+    }
+  },
+
+  attachBlockToShot: async (shotId, blockId, sceneId) => {
+    try {
+      await createShotCoverage(shotId, blockId);
+      await get().loadSceneShots(sceneId);
+    } catch (err) {
+      console.error('Failed to attach block to shot', err);
     }
   },
 }));
