@@ -10,6 +10,7 @@ import {
   Upload,
   Play,
   Link as LinkIcon,
+  Printer,
 } from 'lucide-react';
 import { WorkspaceNode, Shot } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -165,7 +166,7 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
       {/* Top Header / Stats Bar */}
-      <div className="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-3 flex flex-wrap items-center justify-between gap-4 shrink-0">
+      <div className="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-3 flex flex-wrap items-center justify-between gap-4 shrink-0 no-print">
         <div className="flex items-center space-x-4">
           {/* Scene Selector */}
           <div className="flex items-center space-x-2">
@@ -234,6 +235,16 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
           )}
 
           <button
+            onClick={() => window.print()}
+            disabled={shots.length === 0}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono font-medium disabled:opacity-40 transition-colors"
+            title="Print Production Shot Sheet"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Print Sheet</span>
+          </button>
+
+          <button
             onClick={() => setIsAddingShot(!isAddingShot)}
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-medium shadow-md shadow-cyan-950/40 transition-colors"
           >
@@ -247,7 +258,7 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
       {isAddingShot && (
         <form
           onSubmit={handleCreateShot}
-          className="border-b border-slate-800 bg-slate-900/90 px-6 py-3 grid grid-cols-6 gap-3 items-end animate-in fade-in slide-in-from-top-2 duration-150"
+          className="border-b border-slate-800 bg-slate-900/90 px-6 py-3 grid grid-cols-6 gap-3 items-end animate-in fade-in slide-in-from-top-2 duration-150 no-print"
         >
           <div>
             <label className="block text-[10px] font-mono uppercase text-slate-400 mb-1">
@@ -346,6 +357,17 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
 
       {/* Main Table View */}
       <div className="flex-1 overflow-auto p-6">
+        {/* Print-only Production Header */}
+        <div className="hidden print:block mb-6 border-b-2 border-black pb-3">
+          <h1 className="text-xl font-bold uppercase font-mono tracking-wider">
+            PRODUCTION SHOT LIST — {scene?.title || 'SCENE'}
+          </h1>
+          <div className="flex justify-between items-center text-xs font-mono mt-1 text-slate-700">
+            <span>TOTAL SHOTS: {shots.length}</span>
+            <span>ESTIMATED SCENE RUNTIME: {totalSceneRuntime.formatted} ({totalSceneRuntime.totalSecs}s)</span>
+            <span>DATE: {new Date().toLocaleDateString()}</span>
+          </div>
+        </div>
         {shots.length === 0 ? (
           <div className="py-20 text-center border border-dashed border-slate-800 rounded-2xl max-w-md mx-auto px-6">
             <Film className="w-12 h-12 text-slate-700 mx-auto mb-3" />
@@ -366,7 +388,7 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
           </div>
         ) : (
           <div className="bg-slate-900/40 rounded-xl border border-slate-800 overflow-hidden shadow-lg">
-            <table className="w-full text-left text-xs font-mono">
+            <table className="print-shot-table w-full text-left text-xs font-mono">
               <thead className="bg-slate-950/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Shot #</th>
@@ -376,7 +398,7 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
                   <th className="px-4 py-3 font-semibold">Movement</th>
                   <th className="px-4 py-3 font-semibold">Duration (s)</th>
                   <th className="px-4 py-3 font-semibold">Covered Script Blocks</th>
-                  <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                  <th className="px-4 py-3 font-semibold text-right no-print">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -541,7 +563,7 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
                           )}
                           <button
                             onClick={() => setCoverageModalShotId(shot.id)}
-                            className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
+                            className="no-print text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
                           >
                             <LinkIcon className="w-2.5 h-2.5" />
                             <span>
@@ -552,7 +574,7 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right no-print">
                         <div className="flex items-center justify-end space-x-2">
                           {onOpenReel && shot.storyboard_url && (
                             <button

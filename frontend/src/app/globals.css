@@ -24,3 +24,248 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ==========================================================================
+   Industry-Standard Screenplay & Production Print Stylesheet
+   ========================================================================== */
+
+@media print {
+  @page {
+    size: letter;
+    margin: 1in 1in 1in 1.5in;
+  }
+
+  /* Reset layout & force pure black & white */
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Courier Prime', Courier, 'Courier New', monospace !important;
+    font-size: 12pt !important;
+    line-height: 1.15 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide all UI toolbars, buttons, sidebars, navigation, modals & popovers */
+  header,
+  nav,
+  aside,
+  button,
+  .no-print,
+  .app-sidebar,
+  .screenplay-sidebar,
+  .modal-overlay,
+  .toast-container,
+  [role="dialog"],
+  [role="tooltip"] {
+    display: none !important;
+  }
+
+  /* Remove scrollbars, overflow constraints, and fixed flex heights */
+  .overflow-hidden,
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .h-full,
+  .h-screen,
+  .max-h-screen {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* Screenplay document container */
+  .screenplay-print-container {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Scene Headings */
+  .screenplay-scene-heading {
+    font-family: 'Courier Prime', Courier, monospace !important;
+    font-size: 12pt !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    margin-top: 24pt !important;
+    margin-bottom: 12pt !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  /* Action Blocks */
+  .screenplay-action-block {
+    font-family: 'Courier Prime', Courier, monospace !important;
+    font-size: 12pt !important;
+    margin-bottom: 12pt !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    border: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+    text-align: left !important;
+  }
+
+  /* Dialogue Blocks */
+  .screenplay-dialogue-block {
+    margin-top: 12pt !important;
+    margin-bottom: 12pt !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    border: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Character Cue (Uppercase, indented 2.2 inches) */
+  .screenplay-character-cue {
+    font-family: 'Courier Prime', Courier, monospace !important;
+    font-size: 12pt !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    margin-left: 2.2in !important;
+    margin-bottom: 0 !important;
+    text-align: left !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Parenthetical (Indented ~1.6 inches) */
+  .screenplay-parenthetical {
+    font-family: 'Courier Prime', Courier, monospace !important;
+    font-size: 12pt !important;
+    font-style: italic !important;
+    margin-left: 1.6in !important;
+    margin-bottom: 0 !important;
+    text-align: left !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Spoken Dialogue Text (Margins 1.5in on both sides) */
+  .screenplay-dialogue-text {
+    font-family: 'Courier Prime', Courier, monospace !important;
+    font-size: 12pt !important;
+    margin-left: 1.5in !important;
+    margin-right: 1.5in !important;
+    margin-bottom: 12pt !important;
+    text-align: left !important;
+  }
+
+  /* Auto-expanding textareas and inputs for print output */
+  textarea,
+  input[type="text"],
+  input[type="number"],
+  select {
+    border: none !important;
+    background: transparent !important;
+    resize: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: #000000 !important;
+    outline: none !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+  }
+
+  .screenplay-print-container textarea,
+  .screenplay-print-container input[type="text"] {
+    font-family: 'Courier Prime', Courier, monospace !important;
+    font-size: 12pt !important;
+    line-height: inherit !important;
+    width: 100% !important;
+  }
+
+  /* Paper binder theme overrides for print */
+  .print-breakdown-table,
+  .print-shot-table,
+  .screenplay-print-container {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .print-breakdown-table *,
+  .print-shot-table * {
+    color: #000000 !important;
+    background-color: transparent !important;
+    border-color: #d1d5db !important;
+    box-shadow: none !important;
+  }
+
+  /* Production Breakdown Sheet Print Table */
+  .print-breakdown-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 10pt !important;
+    margin-bottom: 16pt !important;
+    page-break-inside: auto !important;
+  }
+
+  .print-breakdown-table th {
+    border-bottom: 2pt solid #000000 !important;
+    padding: 6pt 4pt !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    text-align: left !important;
+  }
+
+  .print-breakdown-table td {
+    border-bottom: 0.5pt solid #cccccc !important;
+    padding: 6pt 4pt !important;
+    vertical-align: top !important;
+  }
+
+  .print-breakdown-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Production Shot List Print Table */
+  .print-shot-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 10pt !important;
+    margin-bottom: 16pt !important;
+  }
+
+  .print-shot-table th {
+    border-bottom: 2pt solid #000000 !important;
+    padding: 6pt 4pt !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    text-align: left !important;
+  }
+
+  .print-shot-table td {
+    border-bottom: 0.5pt solid #cccccc !important;
+    padding: 6pt 4pt !important;
+    vertical-align: middle !important;
+  }
+
+  .print-shot-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+

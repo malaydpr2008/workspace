@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, Copy, Check, FileDown, FileText, ChevronDown } from 'lucide-react';
+import { Download, Copy, Check, FileDown, FileText, ChevronDown, Printer } from 'lucide-react';
 
 interface DocumentExportButtonProps {
   onExportPrimary: () => void;
@@ -9,6 +9,7 @@ interface DocumentExportButtonProps {
   primaryExtension: string;
   onExportPlainText?: () => void;
   onCopyClipboard: () => Promise<boolean>;
+  onPrint?: () => void;
 }
 
 export const DocumentExportButton: React.FC<DocumentExportButtonProps> = ({
@@ -17,6 +18,7 @@ export const DocumentExportButton: React.FC<DocumentExportButtonProps> = ({
   primaryExtension,
   onExportPlainText,
   onCopyClipboard,
+  onPrint,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -47,6 +49,15 @@ export const DocumentExportButton: React.FC<DocumentExportButtonProps> = ({
     }
   };
 
+  const handlePrint = () => {
+    setIsOpen(false);
+    if (onPrint) {
+      onPrint();
+    } else {
+      window.print();
+    }
+  };
+
   return (
     <div className="relative inline-block text-left" ref={menuRef}>
       <button
@@ -59,7 +70,7 @@ export const DocumentExportButton: React.FC<DocumentExportButtonProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-52 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl z-50 p-1.5 space-y-1 text-xs animate-in fade-in zoom-in-95 duration-100 font-sans">
+        <div className="absolute right-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl z-50 p-1.5 space-y-1 text-xs animate-in fade-in zoom-in-95 duration-100 font-sans">
           <div className="px-2.5 py-1 text-[10px] font-mono text-slate-500 uppercase tracking-wider">
             Document Compilation
           </div>
@@ -93,6 +104,17 @@ export const DocumentExportButton: React.FC<DocumentExportButtonProps> = ({
               </div>
             </button>
           )}
+
+          <button
+            onClick={handlePrint}
+            className="w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-slate-200 hover:bg-slate-800 hover:text-white transition-colors text-left"
+          >
+            <Printer className="w-4 h-4 text-violet-400 shrink-0" />
+            <div className="truncate">
+              <div className="font-medium">Print / Save PDF</div>
+              <div className="text-[10px] text-slate-400 font-mono">Industry Standard (Courier 12pt)</div>
+            </div>
+          </button>
 
           <div className="border-t border-slate-800/80 my-1" />
 

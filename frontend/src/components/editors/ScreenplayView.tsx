@@ -17,6 +17,7 @@ import {
   FileUp,
   Tag,
   Upload,
+  BarChart3,
 } from 'lucide-react';
 import { WorkspaceNode, Shot } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -35,6 +36,7 @@ import { BreakdownBadge } from '@/components/breakdown/BreakdownBadge';
 import { BreakdownTagPopover } from '@/components/breakdown/BreakdownTagPopover';
 import { BreakdownSheetView } from '@/components/breakdown/BreakdownSheetView';
 import { ShotListTableView } from '@/components/storyboard/ShotListTableView';
+import { ProductionAnalyticsView } from '@/components/analytics/ProductionAnalyticsView';
 
 interface ScreenplayViewProps {
   node: WorkspaceNode;
@@ -67,7 +69,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
   const [userSelectedSceneId, setUserSelectedSceneId] = useState<string | null>(null);
   const [isReelOpen, setIsReelOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'editor' | 'board' | 'shotlist' | 'breakdown'>('editor');
+  const [viewMode, setViewMode] = useState<'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics'>('editor');
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
@@ -286,7 +288,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
       {/* Top Header Bar */}
-      <div className="h-14 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 flex items-center justify-between shrink-0">
+      <div className="h-14 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 flex items-center justify-between shrink-0 no-print">
         <div className="flex items-center space-x-3">
           <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
             <Clapperboard className="w-5 h-5" />
@@ -381,6 +383,17 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               <Tag className="w-3.5 h-3.5" />
               <span>Breakdown Sheet</span>
             </button>
+            <button
+              onClick={() => setViewMode('analytics')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'analytics'
+                  ? 'bg-cyan-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Analytics</span>
+            </button>
           </div>
 
           {/* Actor Sides Generator Button */}
@@ -410,6 +423,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             onExportPrimary={handleExportFountain}
             onExportPlainText={handleExportPlainText}
             onCopyClipboard={handleCopyClipboard}
+            onPrint={() => window.print()}
           />
 
           {/* Scene Selector Pill Switcher */}
@@ -433,7 +447,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         </div>
       </div>
 
-      {/* Main Content: Beat Board View OR Shot List OR Breakdown OR Script Editor */}
+      {/* Main Content: Beat Board View OR Shot List OR Breakdown OR Analytics OR Script Editor */}
       {viewMode === 'board' ? (
         <BeatBoardView
           parentNode={node}
@@ -462,10 +476,22 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           onSelectScene={setUserSelectedSceneId}
           screenplayNode={node}
         />
+      ) : viewMode === 'analytics' ? (
+        <ProductionAnalyticsView
+          screenplayNode={node}
+          nodes={nodes}
+          characters={characters}
+          breakdownElements={breakdownElements}
+          shotsByScene={shotsByScene}
+          onSelectScene={(sceneId) => {
+            setUserSelectedSceneId(sceneId);
+            setViewMode('editor');
+          }}
+        />
       ) : (
         <div className="flex-1 flex overflow-hidden">
         {/* Left: Script Flow (Courier Prime / Monospace standard format) */}
-        <div className="flex-1 overflow-y-auto p-8 lg:p-12 border-r border-slate-800/80 bg-slate-950/40">
+        <div className="screenplay-print-container flex-1 overflow-y-auto p-8 lg:p-12 border-r border-slate-800/80 bg-slate-950/40">
           <div className="max-w-3xl mx-auto space-y-6">
             {/* Screenplay Heading */}
             {!isScene && (
@@ -485,9 +511,9 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             {currentScene ? (
               <div className="space-y-6">
                 {/* Scene Heading slugline (Editable) */}
-                <div className="group flex items-center justify-between p-3 rounded-lg bg-slate-900/80 border border-slate-800 focus-within:border-cyan-500/60 transition-all">
+                <div className="screenplay-scene-heading group flex items-center justify-between p-3 rounded-lg bg-slate-900/80 border border-slate-800 focus-within:border-cyan-500/60 transition-all">
                   <div className="flex items-center space-x-2 flex-1 mr-3">
-                    <Film className="w-4 h-4 text-rose-400 shrink-0" />
+                    <Film className="w-4 h-4 text-rose-400 shrink-0 no-print" />
                     <input
                       type="text"
                       value={currentScene.title}
@@ -497,7 +523,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                       className="w-full bg-transparent font-mono font-bold text-sm tracking-wide text-white uppercase focus:outline-none placeholder-slate-600"
                     />
                   </div>
-                  <div className="flex items-center space-x-2 text-[11px] font-mono text-slate-500">
+                  <div className="no-print flex items-center space-x-2 text-[11px] font-mono text-slate-500">
                     <span>[Enter: +Action]</span>
                     <button
                       onClick={() => insertBlock(currentScene.id, 'action', null, '')}
@@ -545,13 +571,13 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                       return (
                         <div
                           key={block.id}
-                          className={`group relative p-4 rounded-lg font-mono text-sm leading-relaxed transition-all duration-200 ${
+                          className={`screenplay-action-block group relative p-4 rounded-lg font-mono text-sm leading-relaxed transition-all duration-200 ${
                             isCovered
                               ? 'bg-cyan-950/30 border border-cyan-500/60 shadow-sm shadow-cyan-950 text-cyan-100'
                               : 'text-slate-300 bg-slate-900/20 border border-transparent hover:border-slate-800 hover:bg-slate-900/40'
                           }`}
                         >
-                          <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-sans">
+                          <div className="no-print flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-sans">
                             <div className="flex items-center space-x-2">
                               <span>Action Block</span>
                               <span className="text-slate-600">•</span>
@@ -629,7 +655,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                           />
 
                           {blockBreakdownElements.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-slate-800/60">
+                            <div className="no-print flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-slate-800/60">
                               {blockBreakdownElements.map((el) => (
                                 <BreakdownBadge
                                   key={el.id}
@@ -647,14 +673,14 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                       return (
                         <div
                           key={block.id}
-                          className={`group relative p-5 rounded-lg transition-all duration-200 ${
+                          className={`screenplay-dialogue-block group relative p-5 rounded-lg transition-all duration-200 ${
                             isCovered
                               ? 'bg-blue-950/40 border border-cyan-400/60 ring-1 ring-cyan-400/20 shadow-lg shadow-cyan-950/40'
                               : 'bg-slate-900/20 border border-transparent hover:border-slate-800 hover:bg-slate-900/40'
                           }`}
                         >
                           {/* Block Header & Action Controls */}
-                          <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-sans">
+                          <div className="no-print flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-sans">
                             <div className="flex items-center space-x-2">
                               <span>Dialogue Block</span>
                               <span className="text-slate-600">•</span>
@@ -716,7 +742,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                           </div>
 
                           {/* Character Name with Fuzzy Autocomplete Dropdown */}
-                          <div className="text-center">
+                          <div className="screenplay-character-cue text-center">
                             <CharacterAutocompleteInput
                               blockId={block.id}
                               characterName={characterName}
@@ -743,7 +769,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                             {/* Parenthetical (Optional, Tab to toggle) */}
                             {block.properties?.parenthetical !== undefined &&
                               block.properties?.parenthetical !== '' && (
-                                <div className="mt-1 text-center">
+                                <div className="screenplay-parenthetical mt-1 text-center">
                                   <span className="text-xs font-mono text-slate-400 italic">
                                     (
                                     <input
@@ -773,7 +799,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                           </div>
 
                           {/* Dialogue text */}
-                          <div className="max-w-md mx-auto mt-2 text-center">
+                          <div className="screenplay-dialogue-text max-w-md mx-auto mt-2 text-center">
                             <textarea
                               ref={(el) => {
                                 blockInputRefs.current[block.id] = el;
@@ -788,7 +814,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                           </div>
 
                           {blockBreakdownElements.length > 0 && (
-                            <div className="flex flex-wrap justify-center gap-1.5 mt-3 pt-2 border-t border-slate-800/60">
+                            <div className="no-print flex flex-wrap justify-center gap-1.5 mt-3 pt-2 border-t border-slate-800/60">
                               {blockBreakdownElements.map((el) => (
                                 <BreakdownBadge
                                   key={el.id}
@@ -813,7 +839,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                         </div>
                         <button
                           onClick={() => deleteNode(block.id)}
-                          className="text-slate-600 hover:text-rose-400"
+                          className="no-print text-slate-600 hover:text-rose-400"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -831,7 +857,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         </div>
 
         {/* Right: Synchronized Shot List & Storyboard Panel */}
-        <div className="w-96 flex flex-col bg-slate-950/80 shrink-0 border-l border-slate-800/80">
+        <div className="no-print w-96 flex flex-col bg-slate-950/80 shrink-0 border-l border-slate-800/80">
           {/* Panel Header */}
           <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
             <div className="flex items-center space-x-2">

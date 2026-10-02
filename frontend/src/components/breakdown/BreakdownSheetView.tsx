@@ -6,6 +6,7 @@ import {
   FileText,
   Tag,
   Trash2,
+  Printer,
 } from 'lucide-react';
 import { WorkspaceNode, BreakdownCategory } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -169,7 +170,7 @@ export const BreakdownSheetView: React.FC<BreakdownSheetViewProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
       {/* Sub-Header & Controls Bar */}
-      <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shrink-0">
+      <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shrink-0 no-print">
         <div className="flex items-center space-x-3">
           {/* Scene Selector */}
           <div className="flex items-center space-x-2">
@@ -255,11 +256,32 @@ export const BreakdownSheetView: React.FC<BreakdownSheetViewProps> = ({
             <FileText className="w-3.5 h-3.5" />
             <span>Text</span>
           </button>
+
+          <button
+            onClick={() => window.print()}
+            disabled={displayedItems.length === 0}
+            className="flex items-center space-x-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-mono font-medium disabled:opacity-40 transition-colors"
+            title="Print Production Breakdown Sheet"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Print Sheet</span>
+          </button>
         </div>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Print-only Production Binder Header */}
+        <div className="hidden print:block mb-6 border-b-2 border-black pb-3">
+          <h1 className="text-xl font-bold uppercase font-mono tracking-wider">
+            {screenplayNode.title || 'Screenplay'} — SCRIPT BREAKDOWN SHEET
+          </h1>
+          <div className="flex justify-between items-center text-xs font-mono mt-1 text-slate-700">
+            <span>SCENE: {scene ? scene.title : 'ALL SCENES'}</span>
+            <span>TOTAL ELEMENTS: {displayedItems.length}</span>
+            <span>DATE: {new Date().toLocaleDateString()}</span>
+          </div>
+        </div>
         {displayedItems.length === 0 ? (
           <div className="py-20 text-center border border-dashed border-slate-800 rounded-2xl max-w-xl mx-auto px-6">
             <Tag className="w-12 h-12 text-slate-700 mx-auto mb-3" />
@@ -296,14 +318,14 @@ export const BreakdownSheetView: React.FC<BreakdownSheetViewProps> = ({
 
                 {/* Table */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono">
+                  <table className="print-breakdown-table w-full text-left text-xs font-mono">
                     <thead className="bg-slate-950/60 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-800/60">
                       <tr>
                         <th className="px-4 py-2 font-medium">Element Name</th>
                         <th className="px-4 py-2 font-medium">Scene Mentions</th>
                         <th className="px-4 py-2 font-medium">Script Context</th>
                         <th className="px-4 py-2 font-medium">Notes</th>
-                        <th className="px-4 py-2 font-medium text-right">Actions</th>
+                        <th className="px-4 py-2 font-medium text-right no-print">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
@@ -353,7 +375,7 @@ export const BreakdownSheetView: React.FC<BreakdownSheetViewProps> = ({
                               <span className="text-slate-600 not-italic">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-3 text-right no-print">
                             <button
                               onClick={() => removeBreakdownElement(item.element.id)}
                               className="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors opacity-70 group-hover:opacity-100"
