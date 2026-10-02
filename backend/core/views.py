@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Q
+from django.db import transaction
 from core.models import (
     Workspace,
     WorkspaceNode,
@@ -10,6 +11,7 @@ from core.models import (
     Shot,
     ShotBlockCoverage,
     BreakdownElement,
+    DocumentSnapshot,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -18,6 +20,7 @@ from core.serializers import (
     ShotSerializer,
     ShotBlockCoverageSerializer,
     BreakdownElementSerializer,
+    DocumentSnapshotSerializer,
 )
 
 
@@ -158,4 +161,87 @@ class BreakdownElementViewSet(viewsets.ModelViewSet):
         if category:
             queryset = queryset.filter(category=category.upper())
         return queryset
+
+
+class DocumentSnapshotViewSet(viewsets.ModelViewSet):
+    queryset = DocumentSnapshot.objects.all().order_by("-created_at")
+    serializer_class = DocumentSnapshotSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        document_node = self.request.query_params.get("document_node")
+        if document_node:
+            queryset = queryset.filter(document_node_id=document_node)
+        workspace_id = self.request.query_params.get("workspace_id")
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+        return queryset
+
+    @action(detail=True, methods=["post"])
+    def restore(self, request, pk=None):
+        snapshot = self.get_object()
+        doc = snapshot.document_node
+        data = snapshot.snapshot_data
+
+        nodes_list = data if isinstance(data, list) else data.get("nodes", [])
+        if not nodes_list:
+            return Response(
+                {"error": "No nodes found in snapshot data to restore"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            # Get all current descendants of doc using CTE query
+            sql = """
+            WITH RECURSIVE node_tree AS (
+                SELECT id, parent_id FROM core_workspacenode WHERE id = %s
+                UNION ALL
+                SELECT c.id, c.parent_id FROM core_workspacenode c
+                INNER JOIN node_tree p ON c.parent_id = p.id
+            )
+            SELECT id FROM node_tree WHERE id != %s;
+            """
+            descendants = list(WorkspaceNode.objects.raw(sql, [str(doc.id), str(doc.id)]))
+            descendant_ids = [d.id for d in descendants]
+            if descendant_ids:
+                WorkspaceNode.objects.filter(id__in=descendant_ids).delete()
+
+            # Restore doc attributes if in snapshot
+            doc_data = next((n for n in nodes_list if str(n.get("id")) == str(doc.id)), None)
+            if doc_data:
+                doc.title = doc_data.get("title", doc.title)
+                doc.properties = doc_data.get("properties", doc.properties)
+            doc.revision_color = snapshot.revision_color
+            doc.save()
+
+            # Recreate or restore all child nodes
+            restored_count = 0
+            child_nodes = [n for n in nodes_list if str(n.get("id")) != str(doc.id)]
+
+            for item in child_nodes:
+                parent_id = item.get("parent") or item.get("parent_id") or str(doc.id)
+                WorkspaceNode.objects.create(
+                    id=item.get("id"),
+                    workspace=doc.workspace,
+                    parent_id=parent_id,
+                    type=item.get("type", "action"),
+                    rank=item.get("rank", "0|h:"),
+                    title=item.get("title", ""),
+                    content=item.get("content", ""),
+                    properties=item.get("properties", {}),
+                    revision_color=item.get("revision_color", snapshot.revision_color),
+                    is_locked=item.get("is_locked", False),
+                    revision_asterisk=item.get("revision_asterisk", False),
+                )
+                restored_count += 1
+
+        return Response(
+            {
+                "status": "success",
+                "message": f"Restored snapshot '{snapshot.label}' ({snapshot.revision_color})",
+                "nodes_restored": restored_count,
+            },
+            status=status.HTTP_200_OK,
+        )
+
 

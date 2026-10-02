@@ -129,3 +129,30 @@ class BreakdownElement(models.Model):
     def __str__(self):
         return f"[{self.category}] {self.name}"
 
+
+class DocumentSnapshot(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        Workspace, on_delete=models.CASCADE, related_name="snapshots"
+    )
+    document_node = models.ForeignKey(
+        WorkspaceNode, on_delete=models.CASCADE, related_name="snapshots"
+    )
+    label = models.CharField(max_length=255)
+    revision_color = models.CharField(
+        max_length=32,
+        choices=WorkspaceNode.REVISION_COLOR_CHOICES,
+        default="WHITE",
+    )
+    snapshot_data = models.JSONBField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["document_node", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.label} ({self.revision_color}) - {self.document_node_id}"
+

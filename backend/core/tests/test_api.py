@@ -1,7 +1,15 @@
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from core.models import Workspace, WorkspaceNode, Character, Shot, ShotBlockCoverage
+from core.models import (
+    Workspace,
+    WorkspaceNode,
+    Character,
+    Shot,
+    ShotBlockCoverage,
+    BreakdownElement,
+    DocumentSnapshot,
+)
 
 
 class WorkspaceNodeAPITests(APITestCase):
@@ -189,4 +197,117 @@ class AdditionalAPITests(APITestCase):
         shot.refresh_from_db()
         self.assertTrue(shot.storyboard_file)
         self.assertTrue(shot.storyboard_url)
+
+
+class DocumentSnapshotAPITests(APITestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Studio Lot", slug="studio-lot")
+        self.script = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            type="screenplay",
+            title="Neon Horizon",
+            rank="0|h0:",
+            revision_color="WHITE",
+        )
+        self.scene = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.script,
+            type="scene",
+            title="INT. CONTROL ROOM - NIGHT",
+            rank="0|h1:",
+        )
+        self.action = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.scene,
+            type="action",
+            content="Rain taps against the observation glass.",
+            rank="0|h2:",
+        )
+
+    def test_snapshot_creation_and_retrieval(self):
+        url = reverse("documentsnapshot-list")
+        snapshot_payload = {
+            "document_node": str(self.script.id),
+            "label": "Table Read Polish",
+            "revision_color": "BLUE",
+            "snapshot_data": {
+                "nodes": [
+                    {
+                        "id": str(self.script.id),
+                        "title": "Neon Horizon",
+                        "type": "screenplay",
+                    },
+                    {
+                        "id": str(self.scene.id),
+                        "parent": str(self.script.id),
+                        "title": "INT. CONTROL ROOM - NIGHT",
+                        "type": "scene",
+                    },
+                    {
+                        "id": str(self.action.id),
+                        "parent": str(self.scene.id),
+                        "content": "Rain taps against the observation glass.",
+                        "type": "action",
+                    },
+                ]
+            },
+        }
+
+        response = self.client.post(url, snapshot_payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["label"], "Table Read Polish")
+        self.assertEqual(response.data["revision_color"], "BLUE")
+        self.assertEqual(str(response.data["workspace"]), str(self.workspace.id))
+        self.assertEqual(
+            len(response.data["snapshot_data"]["nodes"]), 3
+        )
+
+        # Filter by document_node
+        list_url = f"{url}?document_node={self.script.id}"
+        list_resp = self.client.get(list_url)
+        self.assertEqual(list_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(list_resp.data), 1)
+
+    def test_snapshot_restore(self):
+        # Create snapshot of current state
+        snapshot = DocumentSnapshot.objects.create(
+            workspace=self.workspace,
+            document_node=self.script,
+            label="Frozen Pre-Production Draft",
+            revision_color="PINK",
+            snapshot_data={
+                "nodes": [
+                    {
+                        "id": str(self.script.id),
+                        "title": "Neon Horizon (Pink Rev)",
+                        "type": "screenplay",
+                    },
+                    {
+                        "id": str(self.scene.id),
+                        "parent": str(self.script.id),
+                        "title": "INT. CONTROL ROOM - NIGHT (RESTORED)",
+                        "type": "scene",
+                        "rank": "0|h1:",
+                    },
+                ]
+            },
+        )
+
+        # Modify active script
+        self.action.content = "Modified text before restore."
+        self.action.save()
+
+        # Call restore
+        restore_url = reverse("documentsnapshot-restore", kwargs={"pk": snapshot.id})
+        response = self.client.post(restore_url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "success")
+
+        # Verify restored state
+        self.script.refresh_from_db()
+        self.assertEqual(self.script.revision_color, "PINK")
+        self.assertEqual(self.script.title, "Neon Horizon (Pink Rev)")
+        self.assertEqual(
+            WorkspaceNode.objects.filter(parent=self.script).count(), 1
+        )
 

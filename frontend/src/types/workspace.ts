@@ -88,3 +88,14 @@ export interface BreakdownElement {
   updated_at: string;
 }
 
+export interface DocumentSnapshot {
+  id: string;
+  workspace: string;
+  document_node: string;
+  label: string;
+  revision_color: RevisionColor;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  snapshot_data: any;
+  created_at: string;
+}
+

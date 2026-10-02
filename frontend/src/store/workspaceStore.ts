@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Workspace, WorkspaceNode, Character, Shot, BreakdownElement } from '@/types/workspace';
+import { Workspace, WorkspaceNode, Character, Shot, BreakdownElement, DocumentSnapshot, RevisionColor } from '@/types/workspace';
 import {
   fetchWorkspaces,
   fetchNodes,
@@ -19,6 +19,9 @@ import {
   updateBreakdownElement,
   deleteBreakdownElement,
   uploadShotImage,
+  fetchSnapshots,
+  createSnapshot,
+  restoreSnapshot,
 } from '@/lib/api';
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -34,6 +37,7 @@ interface WorkspaceState {
   characters: Record<string, Character>;
   shotsByScene: Record<string, Shot[]>;
   breakdownElements: Record<string, BreakdownElement>;
+  snapshots: DocumentSnapshot[];
   isLoading: boolean;
   saveStatus: 'idle' | 'saving' | 'saved';
   error: string | null;
@@ -119,6 +123,16 @@ interface WorkspaceState {
     movedNodeId: string,
     newRank: string
   ) => Promise<void>;
+  loadSnapshots: (documentId: string) => Promise<DocumentSnapshot[]>;
+  saveDraftSnapshot: (
+    documentId: string,
+    label: string,
+    revisionColor: RevisionColor
+  ) => Promise<DocumentSnapshot | null>;
+  restoreDraftSnapshot: (
+    snapshotId: string,
+    documentId: string
+  ) => Promise<boolean>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -131,6 +145,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   characters: {},
   shotsByScene: {},
   breakdownElements: {},
+  snapshots: [],
   isLoading: false,
   saveStatus: 'idle',
   error: null,
@@ -879,6 +894,52 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch (err) {
       console.error('Failed to upload shot storyboard', err);
       return null;
+    }
+  },
+
+  loadSnapshots: async (documentId: string) => {
+    try {
+      const list = await fetchSnapshots(documentId);
+      set({ snapshots: list });
+      return list;
+    } catch (err) {
+      console.error('Failed to load snapshots', err);
+      return [];
+    }
+  },
+
+  saveDraftSnapshot: async (
+    documentId: string,
+    label: string,
+    revisionColor: RevisionColor
+  ) => {
+    try {
+      const subtreeNodes = await fetchSubtree(documentId);
+      const snapshot = await createSnapshot({
+        document_node: documentId,
+        label,
+        revision_color: revisionColor,
+        snapshot_data: { nodes: subtreeNodes },
+      });
+      set((state) => ({
+        snapshots: [snapshot, ...state.snapshots],
+      }));
+      return snapshot;
+    } catch (err) {
+      console.error('Failed to create snapshot', err);
+      return null;
+    }
+  },
+
+  restoreDraftSnapshot: async (snapshotId: string, documentId: string) => {
+    try {
+      await restoreSnapshot(snapshotId);
+      await get().loadSubtree(documentId);
+      await get().loadSnapshots(documentId);
+      return true;
+    } catch (err) {
+      console.error('Failed to restore snapshot', err);
+      return false;
     }
   },
 }));

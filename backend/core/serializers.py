@@ -1,5 +1,13 @@
 from rest_framework import serializers
-from core.models import Workspace, WorkspaceNode, Character, Shot, ShotBlockCoverage, BreakdownElement
+from core.models import (
+    Workspace,
+    WorkspaceNode,
+    Character,
+    Shot,
+    ShotBlockCoverage,
+    BreakdownElement,
+    DocumentSnapshot,
+)
 
 
 class WorkspaceSerializer(serializers.ModelSerializer):
@@ -66,4 +74,28 @@ class BreakdownElementSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class DocumentSnapshotSerializer(serializers.ModelSerializer):
+    workspace = serializers.PrimaryKeyRelatedField(
+        queryset=Workspace.objects.all(), required=False
+    )
+
+    class Meta:
+        model = DocumentSnapshot
+        fields = [
+            "id",
+            "workspace",
+            "document_node",
+            "label",
+            "revision_color",
+            "snapshot_data",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def validate(self, attrs):
+        if "workspace" not in attrs and "document_node" in attrs:
+            attrs["workspace"] = attrs["document_node"].workspace
+        return attrs
 

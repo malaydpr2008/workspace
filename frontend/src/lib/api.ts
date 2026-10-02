@@ -1,4 +1,4 @@
-import { Workspace, WorkspaceNode, Character, Shot, BreakdownElement } from '@/types/workspace';
+import { Workspace, WorkspaceNode, Character, Shot, BreakdownElement, DocumentSnapshot } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
@@ -236,6 +236,43 @@ export async function uploadShotImage(
     body: formData,
   });
   return handleResponse<Shot>(res);
+}
+
+export async function fetchSnapshots(documentId?: string): Promise<DocumentSnapshot[]> {
+  const url = new URL(`${API_BASE_URL}/snapshots/`);
+  if (documentId) {
+    url.searchParams.set('document_node', documentId);
+  }
+  const res = await fetch(url.toString(), {
+    cache: 'no-store',
+  });
+  return handleResponse<DocumentSnapshot[]>(res);
+}
+
+export async function createSnapshot(data: {
+  workspace?: string;
+  document_node: string;
+  label: string;
+  revision_color: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  snapshot_data: any;
+}): Promise<DocumentSnapshot> {
+  const res = await fetch(`${API_BASE_URL}/snapshots/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<DocumentSnapshot>(res);
+}
+
+export async function restoreSnapshot(
+  snapshotId: string
+): Promise<{ status: string; message: string; nodes_restored: number }> {
+  const res = await fetch(`${API_BASE_URL}/snapshots/${snapshotId}/restore/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return handleResponse<{ status: string; message: string; nodes_restored: number }>(res);
 }
 
 

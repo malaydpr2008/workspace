@@ -18,6 +18,7 @@ import {
   Tag,
   Upload,
   BarChart3,
+  History,
 } from 'lucide-react';
 import { WorkspaceNode, Shot, RevisionColor } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -38,6 +39,8 @@ import { BreakdownSheetView } from '@/components/breakdown/BreakdownSheetView';
 import { ShotListTableView } from '@/components/storyboard/ShotListTableView';
 import { ProductionAnalyticsView } from '@/components/analytics/ProductionAnalyticsView';
 import { RevisionDraftSelector } from '@/components/editors/RevisionDraftSelector';
+import { VersionHistoryModal } from '@/components/history/VersionHistoryModal';
+import { exportProductionBibleZip } from '@/lib/productionBible';
 import {
   getRevisionConfig,
   getSceneNumber,
@@ -79,6 +82,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [viewMode, setViewMode] = useState<'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics'>('editor');
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   // Breakdown tag popover state
   const [activeTagPopoverBlockId, setActiveTagPopoverBlockId] = useState<string | null>(null);
@@ -234,6 +238,34 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     const content = compileScreenplayToFountain(node, nodes, childrenMap, characters);
     return await copyToClipboard(content);
   };
+
+  const handleExportProductionBible = async () => {
+    try {
+      await exportProductionBibleZip(
+        node,
+        nodes,
+        childrenMap,
+        characters,
+        shotsByScene,
+        breakdownElements
+      );
+    } catch (err) {
+      console.error('Failed to export production bible', err);
+    }
+  };
+
+  // Collect all screenplay subtree nodes for version history diffing
+  const screenplaySubtreeNodes = useMemo(() => {
+    const result: WorkspaceNode[] = [];
+    const collect = (currId: string) => {
+      const n = nodes[currId];
+      if (n) result.push(n);
+      const childIds = childrenMap[currId] || [];
+      childIds.forEach(collect);
+    };
+    collect(node.id);
+    return result;
+  }, [node.id, nodes, childrenMap]);
 
   // Focus helper
   const focusBlock = (blockId: string) => {
@@ -490,6 +522,16 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             <span>Actor Sides</span>
           </button>
 
+          {/* Draft History / Snapshots Button */}
+          <button
+            onClick={() => setIsHistoryModalOpen(true)}
+            className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 border border-violet-500/30 text-xs font-mono font-medium transition-all"
+            title="View version history, draft snapshots, and visual script diffing"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Draft History</span>
+          </button>
+
           {/* Import Fountain Script Button */}
           <button
             onClick={() => setIsImportModalOpen(true)}
@@ -506,6 +548,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             primaryExtension="fountain"
             onExportPrimary={handleExportFountain}
             onExportPlainText={handleExportPlainText}
+            onExportBible={handleExportProductionBible}
             onCopyClipboard={handleCopyClipboard}
             onPrint={() => window.print()}
           />
@@ -1391,6 +1434,14 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           setUserSelectedSceneId(firstSceneId);
           setViewMode('editor');
         }}
+      />
+
+      {/* Version History & Diff Modal */}
+      <VersionHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        screenplayNode={node}
+        currentNodes={screenplaySubtreeNodes}
       />
     </div>
   );

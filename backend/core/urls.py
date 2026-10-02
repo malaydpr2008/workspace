@@ -7,6 +7,7 @@ from core.views import (
     ShotViewSet,
     ShotBlockCoverageViewSet,
     BreakdownElementViewSet,
+    DocumentSnapshotViewSet,
 )
 
 router = DefaultRouter()
@@ -17,6 +18,7 @@ router.register(r"shots", ShotViewSet, basename="shot")
 router.register(r"shot-coverages", ShotBlockCoverageViewSet, basename="shotblockcoverage")
 router.register(r"shot-coverage", ShotBlockCoverageViewSet, basename="shotcoverage")
 router.register(r"breakdown-elements", BreakdownElementViewSet, basename="breakdownelement")
+router.register(r"snapshots", DocumentSnapshotViewSet, basename="documentsnapshot")
 
 urlpatterns = [
     path("", include(router.urls)),
