@@ -1,4 +1,4 @@
-import { Workspace, WorkspaceNode } from '@/types/workspace';
+import { Workspace, WorkspaceNode, Character, Shot } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
@@ -64,3 +64,26 @@ export async function updateNode(
   });
   return handleResponse<WorkspaceNode>(res);
 }
+
+export async function fetchShots(sceneId?: string): Promise<Shot[]> {
+  const url = new URL(`${API_BASE_URL}/shots/`);
+  if (sceneId) {
+    url.searchParams.set('scene_id', sceneId);
+  }
+  const res = await fetch(url.toString(), {
+    cache: 'no-store',
+  });
+  return handleResponse<Shot[]>(res);
+}
+
+export async function fetchCharacters(workspaceId?: string): Promise<Character[]> {
+  const url = new URL(`${API_BASE_URL}/characters/`);
+  if (workspaceId) {
+    url.searchParams.set('workspace_id', workspaceId);
+  }
+  const res = await fetch(url.toString(), {
+    cache: 'no-store',
+  });
+  return handleResponse<Character[]>(res);
+}
+

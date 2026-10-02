@@ -48,4 +48,5 @@ export interface Shot {
   lens: string;
   storyboard_url: string;
   duration_seconds: number;
+  blocks?: WorkspaceNode[];
 }
