@@ -78,6 +78,12 @@ interface WorkspaceState {
     sceneId: string
   ) => Promise<void>;
   createWorkspaceCharacter: (name: string) => Promise<Character | null>;
+  reorderChildNodes: (
+    parentId: string,
+    newOrderedIds: string[],
+    movedNodeId: string,
+    newRank: string
+  ) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -579,6 +585,39 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch (err) {
       console.error('Failed to create character', err);
       return null;
+    }
+  },
+
+  reorderChildNodes: async (parentId, newOrderedIds, movedNodeId, newRank) => {
+    const { nodes, childrenMap } = get();
+    const movedNode = nodes[movedNodeId];
+    if (!movedNode) return;
+
+    set({
+      nodes: {
+        ...nodes,
+        [movedNodeId]: {
+          ...movedNode,
+          rank: newRank,
+        },
+      },
+      childrenMap: {
+        ...childrenMap,
+        [parentId]: newOrderedIds,
+      },
+      saveStatus: 'saving',
+    });
+
+    try {
+      await updateNode(movedNodeId, { rank: newRank });
+      set({ saveStatus: 'saved' });
+      if (saveStatusTimer) clearTimeout(saveStatusTimer);
+      saveStatusTimer = setTimeout(() => {
+        set({ saveStatus: 'idle' });
+      }, 1500);
+    } catch (err) {
+      console.error('Failed to update node rank', err);
+      set({ saveStatus: 'idle' });
     }
   },
 }));

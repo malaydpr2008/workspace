@@ -13,6 +13,7 @@ import {
   Link as LinkIcon,
   X,
   LayoutGrid,
+  User,
 } from 'lucide-react';
 import { WorkspaceNode, Shot } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -24,6 +25,8 @@ import {
 import { CharacterAutocompleteInput } from '@/components/editors/CharacterAutocompleteInput';
 import { DocumentExportButton } from '@/components/export/DocumentExportButton';
 import { StoryboardReelModal } from '@/components/storyboard/StoryboardReelModal';
+import { BeatBoardView } from '@/components/views/BeatBoardView';
+import { CharacterSidesModal } from '@/components/export/CharacterSidesModal';
 
 interface ScreenplayViewProps {
   node: WorkspaceNode;
@@ -45,12 +48,15 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     deleteNode,
     createSceneShot,
     attachBlockToShot,
+    selectNode,
     saveStatus,
   } = useWorkspaceStore();
 
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
   const [userSelectedSceneId, setUserSelectedSceneId] = useState<string | null>(null);
   const [isReelOpen, setIsReelOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'editor' | 'board'>('editor');
+  const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
 
   // New shot form state
   const [isAddingShot, setIsAddingShot] = useState(false);
@@ -278,6 +284,42 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             )}
           </div>
 
+          {/* Segmented View Mode Toggle */}
+          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+            <button
+              onClick={() => setViewMode('editor')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'editor'
+                  ? 'bg-cyan-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Clapperboard className="w-3.5 h-3.5" />
+              <span>Script</span>
+            </button>
+            <button
+              onClick={() => setViewMode('board')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'board'
+                  ? 'bg-cyan-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Beat Board</span>
+            </button>
+          </div>
+
+          {/* Actor Sides Generator Button */}
+          <button
+            onClick={() => setIsSidesModalOpen(true)}
+            className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono font-medium transition-all"
+            title="Generate and export actor sides"
+          >
+            <User className="w-3.5 h-3.5" />
+            <span>Actor Sides</span>
+          </button>
+
           {/* Export Dropdown */}
           <DocumentExportButton
             primaryLabel="Export Fountain (.fountain)"
@@ -308,8 +350,20 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         </div>
       </div>
 
-      {/* Main Split View: Script Layout on Left, Shot List on Right */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Content: Beat Board View OR Script Editor */}
+      {viewMode === 'board' ? (
+        <BeatBoardView
+          parentNode={node}
+          beats={scenes}
+          onOpenBeat={(beatId) => {
+            setUserSelectedSceneId(beatId);
+            setViewMode('editor');
+            selectNode(beatId);
+          }}
+          beatTypeLabel="Scene"
+        />
+      ) : (
+        <div className="flex-1 flex overflow-hidden">
         {/* Left: Script Flow (Courier Prime / Monospace standard format) */}
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 border-r border-slate-800/80 bg-slate-950/40">
           <div className="max-w-3xl mx-auto space-y-6">
@@ -843,6 +897,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Storyboard Reel Modal */}
       <StoryboardReelModal
@@ -855,6 +910,14 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           setActiveShotId(id);
           setIsReelOpen(false);
         }}
+      />
+
+      {/* Actor Sides Generator Modal */}
+      <CharacterSidesModal
+        isOpen={isSidesModalOpen}
+        onClose={() => setIsSidesModalOpen(false)}
+        screenplayNode={node}
+        scenes={scenes}
       />
     </div>
   );

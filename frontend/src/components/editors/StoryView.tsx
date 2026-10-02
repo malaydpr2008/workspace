@@ -12,6 +12,7 @@ import {
   Plus,
   Trash2,
   Check,
+  LayoutGrid,
 } from 'lucide-react';
 import { WorkspaceNode } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -21,6 +22,7 @@ import {
   copyToClipboard,
 } from '@/lib/compiler';
 import { DocumentExportButton } from '@/components/export/DocumentExportButton';
+import { BeatBoardView } from '@/components/views/BeatBoardView';
 
 interface StoryViewProps {
   node: WorkspaceNode;
@@ -35,10 +37,12 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
     updateNodeTitle,
     insertBlock,
     deleteNode,
+    selectNode,
     saveStatus,
   } = useWorkspaceStore();
 
   const isChapter = node.type === 'chapter';
+  const [viewMode, setViewMode] = useState<'editor' | 'board'>('editor');
 
   const chapters: WorkspaceNode[] = useMemo(() => {
     if (isChapter) return [node];
@@ -173,6 +177,32 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
             )}
           </div>
 
+          {/* Segmented View Mode Toggle */}
+          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+            <button
+              onClick={() => setViewMode('editor')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'editor'
+                  ? 'bg-violet-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Manuscript</span>
+            </button>
+            <button
+              onClick={() => setViewMode('board')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'board'
+                  ? 'bg-violet-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Beat Board</span>
+            </button>
+          </div>
+
           <div className="flex items-center space-x-3 text-xs bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
             <div className="flex items-center space-x-1 text-violet-400 font-mono">
               <BarChart3 className="w-3.5 h-3.5" />
@@ -191,8 +221,20 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
         </div>
       </div>
 
-      {/* Main Reader View */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Content Area: Beat Board View OR Manuscript Reader */}
+      {viewMode === 'board' ? (
+        <BeatBoardView
+          parentNode={node}
+          beats={chapters}
+          onOpenBeat={(chapterId) => {
+            setUserSelectedChapterId(chapterId);
+            setViewMode('editor');
+            selectNode(chapterId);
+          }}
+          beatTypeLabel="Chapter"
+        />
+      ) : (
+        <div className="flex-1 flex overflow-hidden">
         {/* Chapter Outline Sidebar */}
         <div className="w-64 border-r border-slate-800/80 bg-slate-950/60 p-4 space-y-1.5 shrink-0 overflow-y-auto">
           <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
@@ -331,6 +373,7 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };
