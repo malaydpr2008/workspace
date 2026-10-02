@@ -1,4 +1,7 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.db.models import Q
 from core.models import Workspace, WorkspaceNode, Character, Shot, ShotBlockCoverage
 from core.serializers import (
     WorkspaceSerializer,
@@ -36,6 +39,47 @@ class WorkspaceNodeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(type=node_type)
 
         return queryset
+
+    @action(detail=True, methods=["get"])
+    def subtree(self, request, pk=None):
+        instance = self.get_object()
+        sql = """
+        WITH RECURSIVE node_tree AS (
+            SELECT * FROM core_workspacenode WHERE id = %s
+            UNION ALL
+            SELECT c.* FROM core_workspacenode c
+            INNER JOIN node_tree p ON c.parent_id = p.id
+        )
+        SELECT * FROM node_tree ORDER BY rank;
+        """
+        nodes = list(WorkspaceNode.objects.raw(sql, [str(instance.id)]))
+        serializer = self.get_serializer(nodes, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["get"])
+    def search(self, request):
+        query = request.query_params.get("q", "").strip()
+        workspace_id = request.query_params.get("workspace_id")
+
+        if not query:
+            return Response([])
+
+        queryset = self.get_queryset()
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+
+        try:
+            from django.contrib.postgres.search import SearchVector, SearchQuery
+            vector = SearchVector("title", weight="A") + SearchVector("content", weight="B")
+            search_query = SearchQuery(query)
+            results = queryset.annotate(search=vector).filter(search=search_query)
+            if not results.exists():
+                results = queryset.filter(Q(title__icontains=query) | Q(content__icontains=query))
+        except Exception:
+            results = queryset.filter(Q(title__icontains=query) | Q(content__icontains=query))
+
+        serializer = self.get_serializer(results, many=True)
+        return Response(serializer.data)
 
 
 class CharacterViewSet(viewsets.ModelViewSet):

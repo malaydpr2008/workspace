@@ -139,5 +139,25 @@ export async function createCharacter(characterData: Partial<Character>): Promis
   return handleResponse<Character>(res);
 }
 
+export async function fetchSubtree(nodeId: string): Promise<WorkspaceNode[]> {
+  const res = await fetch(`${API_BASE_URL}/nodes/${nodeId}/subtree/`, {
+    cache: 'no-store',
+  });
+  return handleResponse<WorkspaceNode[]>(res);
+}
+
+export async function searchWorkspaceNodes(
+  workspaceId: string,
+  query: string
+): Promise<WorkspaceNode[]> {
+  const url = new URL(`${API_BASE_URL}/nodes/search/`);
+  url.searchParams.set('q', query);
+  url.searchParams.set('workspace_id', workspaceId);
+  const res = await fetch(url.toString(), {
+    cache: 'no-store',
+  });
+  return handleResponse<WorkspaceNode[]>(res);
+}
+
 
 

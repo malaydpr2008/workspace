@@ -15,11 +15,13 @@ import {
   Command,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { searchWorkspaceNodes } from '@/lib/api';
+import { WorkspaceNode } from '@/types/workspace';
 
 interface CommandItem {
   id: string;
   title: string;
-  category: 'Actions' | 'Documents' | 'Scenes & Chapters' | 'Characters';
+  category: 'Actions' | 'Documents' | 'Scenes & Chapters' | 'Characters' | 'Search Matches';
   subtitle?: string;
   icon: React.ComponentType<{ className?: string }>;
   colorClass: string;
@@ -30,8 +32,10 @@ export const CommandPalette: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [remoteResults, setRemoteResults] = useState<WorkspaceNode[]>([]);
 
   const {
+    currentWorkspace,
     nodes,
     characters,
     createNewNode,
@@ -69,6 +73,25 @@ export const CommandPalette: React.FC = () => {
       }, 50);
     }
   }, [isOpen]);
+
+  // Debounced PostgreSQL Full-Text Search
+  useEffect(() => {
+    const q = query.trim();
+    if (!currentWorkspace || q.length < 2) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchWorkspaceNodes(currentWorkspace.id, q);
+        setRemoteResults(results);
+      } catch (err) {
+        console.error('Full text search error', err);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [query, currentWorkspace]);
 
   // Aggregate searchable items
   const items: CommandItem[] = useMemo(() => {
@@ -186,8 +209,25 @@ export const CommandPalette: React.FC = () => {
       });
     });
 
+    // 5. Database Full-Text Search Matches
+    remoteResults.forEach((rn) => {
+      if (list.some((it) => it.id.includes(rn.id))) return;
+
+      list.push({
+        id: `remote-${rn.id}`,
+        title: rn.title || rn.content.slice(0, 50),
+        category: 'Search Matches',
+        subtitle: `${rn.type.toUpperCase()}: ${rn.content.slice(0, 70)}`,
+        icon: FileText,
+        colorClass: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+        onSelect: async () => {
+          await selectNode(rn.id);
+        },
+      });
+    });
+
     return list;
-  }, [nodes, characters, createNewNode, selectNode]);
+  }, [nodes, characters, remoteResults, createNewNode, selectNode]);
 
   // Filter items based on user search query
   const filteredItems = useMemo(() => {

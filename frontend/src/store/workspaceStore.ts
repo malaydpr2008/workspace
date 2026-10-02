@@ -11,6 +11,7 @@ import {
   createShot,
   createShotCoverage,
   createCharacter,
+  fetchSubtree,
 } from '@/lib/api';
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -28,8 +29,11 @@ interface WorkspaceState {
   isLoading: boolean;
   saveStatus: 'idle' | 'saving' | 'saved';
   error: string | null;
+  lastError: string | null;
 
   // Actions
+  clearLastError: () => void;
+  loadSubtree: (nodeId: string) => Promise<WorkspaceNode[]>;
   loadWorkspace: (slug: string) => Promise<void>;
   toggleExpandNode: (nodeId: string) => Promise<void>;
   selectNode: (nodeId: string) => Promise<void>;
@@ -98,6 +102,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   isLoading: false,
   saveStatus: 'idle',
   error: null,
+  lastError: null,
+
+  clearLastError: () => set({ lastError: null }),
 
   loadWorkspace: async (slug: string) => {
     set({ isLoading: true, error: null });
@@ -324,6 +331,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const { nodes } = get();
     const existing = nodes[nodeId];
     if (!existing) return;
+    const previousContent = existing.content;
 
     // Optimistically update
     set({
@@ -349,6 +357,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         }, 1500);
       } catch (err) {
         console.error('Failed to save content for node', nodeId, err);
+        const current = get().nodes[nodeId];
+        if (current) {
+          set({
+            nodes: {
+              ...get().nodes,
+              [nodeId]: { ...current, content: previousContent },
+            },
+            saveStatus: 'idle',
+            lastError: `Network sync error: content update rolled back.`,
+          });
+        }
       }
     }, 400);
   },
@@ -357,6 +376,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const { nodes } = get();
     const existing = nodes[nodeId];
     if (!existing) return;
+    const previousTitle = existing.title;
 
     set({
       nodes: {
@@ -381,6 +401,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         }, 1500);
       } catch (err) {
         console.error('Failed to save title for node', nodeId, err);
+        const current = get().nodes[nodeId];
+        if (current) {
+          set({
+            nodes: {
+              ...get().nodes,
+              [nodeId]: { ...current, title: previousTitle },
+            },
+            saveStatus: 'idle',
+            lastError: `Network sync error: title rolled back to "${previousTitle}".`,
+          });
+        }
       }
     }, 400);
   },
@@ -593,6 +624,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const movedNode = nodes[movedNodeId];
     if (!movedNode) return;
 
+    const previousChildren = childrenMap[parentId] || [];
+    const previousRank = movedNode.rank;
+
     set({
       nodes: {
         ...nodes,
@@ -617,7 +651,49 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }, 1500);
     } catch (err) {
       console.error('Failed to update node rank', err);
-      set({ saveStatus: 'idle' });
+      const current = get().nodes[movedNodeId];
+      set({
+        nodes: {
+          ...get().nodes,
+          [movedNodeId]: current ? { ...current, rank: previousRank } : current,
+        },
+        childrenMap: {
+          ...get().childrenMap,
+          [parentId]: previousChildren,
+        },
+        saveStatus: 'idle',
+        lastError: `Network error: failed to reorder node. Order restored.`,
+      });
+    }
+  },
+
+  loadSubtree: async (nodeId: string) => {
+    try {
+      const subNodes = await fetchSubtree(nodeId);
+      const { nodes, childrenMap } = get();
+      const newNodes = { ...nodes };
+      const newChildrenMap = { ...childrenMap };
+
+      subNodes.forEach((node) => {
+        newNodes[node.id] = node;
+        if (node.parent) {
+          if (!newChildrenMap[node.parent]) {
+            newChildrenMap[node.parent] = [];
+          }
+          if (!newChildrenMap[node.parent].includes(node.id)) {
+            newChildrenMap[node.parent].push(node.id);
+          }
+        }
+      });
+
+      set({
+        nodes: newNodes,
+        childrenMap: newChildrenMap,
+      });
+      return subNodes;
+    } catch (err) {
+      console.error('Failed to load subtree', err);
+      return [];
     }
   },
 }));

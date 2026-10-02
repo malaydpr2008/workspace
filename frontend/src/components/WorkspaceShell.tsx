@@ -5,7 +5,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { WorkspaceSidebar } from './tree/WorkspaceSidebar';
 import { NodeDispatcher } from './NodeDispatcher';
 import { CommandPalette } from './navigation/CommandPalette';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, X } from 'lucide-react';
 
 interface WorkspaceShellProps {
   slug?: string;
@@ -14,11 +14,22 @@ interface WorkspaceShellProps {
 export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
   slug = 'production-studio',
 }) => {
-  const { loadWorkspace, error, currentWorkspace } = useWorkspaceStore();
+  const { loadWorkspace, error, currentWorkspace, lastError, clearLastError } =
+    useWorkspaceStore();
 
   useEffect(() => {
     loadWorkspace(slug);
   }, [slug, loadWorkspace]);
+
+  // Auto-dismiss lastError after 6 seconds
+  useEffect(() => {
+    if (lastError) {
+      const timer = setTimeout(() => {
+        clearLastError();
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastError, clearLastError]);
 
   if (error && !currentWorkspace) {
     return (
@@ -57,6 +68,23 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
 
       {/* Global Universal Command Palette (CMD+K / Ctrl+K) */}
       <CommandPalette />
+
+      {/* Non-intrusive Floating Sync Error Banner / Toast */}
+      {lastError && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-slate-900 border border-rose-500/40 text-slate-200 px-4 py-3 rounded-xl shadow-2xl flex items-start space-x-3 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs">
+            <div className="font-semibold text-rose-300">Sync Failure</div>
+            <div className="text-slate-400 mt-0.5">{lastError}</div>
+          </div>
+          <button
+            onClick={clearLastError}
+            className="text-slate-500 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

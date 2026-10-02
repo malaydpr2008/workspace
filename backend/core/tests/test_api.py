@@ -80,6 +80,30 @@ class WorkspaceNodeAPITests(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["title"], "INT. CAFE - DAY")
 
+    def test_recursive_cte_subtree(self):
+        block = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.child_node,
+            type="dialogue",
+            content="Hello world from deepest node",
+            rank="0|h2:",
+        )
+        url = reverse("workspacenode-subtree", kwargs={"pk": self.root_node.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 3)
+        node_ids = [n["id"] for n in response.data]
+        self.assertIn(str(self.root_node.id), node_ids)
+        self.assertIn(str(self.child_node.id), node_ids)
+        self.assertIn(str(block.id), node_ids)
+
+    def test_search_nodes(self):
+        url = f"{reverse('workspacenode-search')}?q=CAFE&workspace_id={self.workspace.id}"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], str(self.child_node.id))
+
 
 class AdditionalAPITests(APITestCase):
     def setUp(self):
