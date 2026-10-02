@@ -46,7 +46,31 @@ export interface Shot {
   shot_number: string;
   shot_type: string;
   lens: string;
+  movement?: string;
   storyboard_url: string;
+  storyboard_file?: string | null;
   duration_seconds: number;
   blocks?: WorkspaceNode[];
 }
+
+export type BreakdownCategory =
+  | 'PROP'
+  | 'COSTUME'
+  | 'VFX'
+  | 'SFX'
+  | 'LOCATION'
+  | 'VEHICLE'
+  | 'MAKEUP';
+
+export interface BreakdownElement {
+  id: string;
+  workspace: string;
+  category: BreakdownCategory;
+  name: string;
+  notes: string;
+  block_ids: string[];
+  blocks?: WorkspaceNode[];
+  created_at: string;
+  updated_at: string;
+}
+

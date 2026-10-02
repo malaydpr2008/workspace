@@ -151,3 +151,42 @@ class AdditionalAPITests(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(len(response.data[0]["blocks"]), 1)
         self.assertEqual(response.data[0]["blocks"][0]["id"], str(self.block.id))
+
+    def test_breakdown_element_crud(self):
+        url = reverse("breakdownelement-list")
+        payload = {
+            "workspace": str(self.workspace.id),
+            "category": "PROP",
+            "name": "Laser Pistol",
+            "notes": "Custom silver metallic prop",
+            "block_ids": [str(self.block.id)],
+        }
+        create_resp = self.client.post(url, payload, format="json")
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(create_resp.data["name"], "Laser Pistol")
+        self.assertEqual(create_resp.data["category"], "PROP")
+        self.assertEqual(len(create_resp.data["blocks"]), 1)
+
+        list_resp = self.client.get(f"{url}?workspace_id={self.workspace.id}&category=PROP")
+        self.assertEqual(list_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(list_resp.data), 1)
+
+    def test_shot_image_upload(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        shot = Shot.objects.create(
+            scene=self.scene,
+            shot_number="2B",
+            shot_type="CLOSE-UP",
+        )
+        image = SimpleUploadedFile("storyboard.png", b"fake_png_data", content_type="image/png")
+        url = reverse("shot-upload-image", kwargs={"pk": shot.id})
+        response = self.client.post(url, {"file": image}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("storyboard_url", response.data)
+        self.assertTrue(response.data["storyboard_url"])
+
+        shot.refresh_from_db()
+        self.assertTrue(shot.storyboard_file)
+        self.assertTrue(shot.storyboard_url)
+

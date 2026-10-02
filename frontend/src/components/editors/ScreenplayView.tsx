@@ -15,6 +15,8 @@ import {
   LayoutGrid,
   User,
   FileUp,
+  Tag,
+  Upload,
 } from 'lucide-react';
 import { WorkspaceNode, Shot } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -29,6 +31,10 @@ import { StoryboardReelModal } from '@/components/storyboard/StoryboardReelModal
 import { BeatBoardView } from '@/components/views/BeatBoardView';
 import { CharacterSidesModal } from '@/components/export/CharacterSidesModal';
 import { ScriptImportModal } from '@/components/modals/ScriptImportModal';
+import { BreakdownBadge } from '@/components/breakdown/BreakdownBadge';
+import { BreakdownTagPopover } from '@/components/breakdown/BreakdownTagPopover';
+import { BreakdownSheetView } from '@/components/breakdown/BreakdownSheetView';
+import { ShotListTableView } from '@/components/storyboard/ShotListTableView';
 
 interface ScreenplayViewProps {
   node: WorkspaceNode;
@@ -40,6 +46,8 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     childrenMap,
     shotsByScene,
     characters,
+    breakdownElements,
+    loadBreakdownElements,
     loadSceneShots,
     loadNodeChildren,
     updateNodeContent,
@@ -52,14 +60,20 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     attachBlockToShot,
     selectNode,
     saveStatus,
+    untagBlockFromElement,
+    uploadShotStoryboard,
   } = useWorkspaceStore();
 
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
   const [userSelectedSceneId, setUserSelectedSceneId] = useState<string | null>(null);
   const [isReelOpen, setIsReelOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'editor' | 'board'>('editor');
+  const [viewMode, setViewMode] = useState<'editor' | 'board' | 'shotlist' | 'breakdown'>('editor');
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  // Breakdown tag popover state
+  const [activeTagPopoverBlockId, setActiveTagPopoverBlockId] = useState<string | null>(null);
+  const [popoverInitialText, setPopoverInitialText] = useState('');
 
   // New shot form state
   const [isAddingShot, setIsAddingShot] = useState(false);
@@ -68,6 +82,11 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [newShotLens, setNewShotLens] = useState('50mm Anamorphic');
   const [newShotDuration, setNewShotDuration] = useState('3.0');
   const [newShotUrl, setNewShotUrl] = useState('');
+  const [newShotFile, setNewShotFile] = useState<File | null>(null);
+  const [isUploadingSidebarShotId, setIsUploadingSidebarShotId] = useState<string | null>(null);
+
+  const shotSidebarFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const newShotFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Refs for focusing after keyboard actions
   const blockInputRefs = useRef<Record<string, HTMLTextAreaElement | HTMLInputElement | null>>({});
@@ -87,6 +106,10 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     : (userSelectedSceneId && scenes.some((s) => s.id === userSelectedSceneId)
         ? userSelectedSceneId
         : scenes[0]?.id) || '';
+
+  useEffect(() => {
+    loadBreakdownElements();
+  }, [loadBreakdownElements]);
 
   useEffect(() => {
     if (activeSceneId) {
@@ -211,6 +234,26 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     }
   };
 
+  const handleOpenTagPopover = (blockId: string) => {
+    let selectedText = '';
+    const inputEl = blockInputRefs.current[blockId];
+    if (inputEl && 'selectionStart' in inputEl && 'selectionEnd' in inputEl) {
+      const start = inputEl.selectionStart || 0;
+      const end = inputEl.selectionEnd || 0;
+      if (end > start) {
+        selectedText = inputEl.value.substring(start, end).trim();
+      }
+    }
+    setPopoverInitialText(selectedText);
+    setActiveTagPopoverBlockId((prev) => (prev === blockId ? null : blockId));
+  };
+
+  const getBlockBreakdownElements = (blockId: string) => {
+    return Object.values(breakdownElements).filter((el) =>
+      el.block_ids?.includes(blockId)
+    );
+  };
+
   const handleCreateShotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentScene || !newShotNumber.trim()) return;
@@ -224,8 +267,13 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     });
 
     if (shot) {
+      if (newShotFile) {
+        await uploadShotStoryboard(shot.id, newShotFile, currentScene.id);
+        setNewShotFile(null);
+      }
       setActiveShotId(shot.id);
       setNewShotNumber('');
+      setNewShotUrl('');
       setIsAddingShot(false);
     }
   };
@@ -311,6 +359,28 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               <LayoutGrid className="w-3.5 h-3.5" />
               <span>Beat Board</span>
             </button>
+            <button
+              onClick={() => setViewMode('shotlist')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'shotlist'
+                  ? 'bg-cyan-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span>Shot List</span>
+            </button>
+            <button
+              onClick={() => setViewMode('breakdown')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'breakdown'
+                  ? 'bg-cyan-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Tag className="w-3.5 h-3.5" />
+              <span>Breakdown Sheet</span>
+            </button>
           </div>
 
           {/* Actor Sides Generator Button */}
@@ -363,7 +433,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         </div>
       </div>
 
-      {/* Main Content: Beat Board View OR Script Editor */}
+      {/* Main Content: Beat Board View OR Shot List OR Breakdown OR Script Editor */}
       {viewMode === 'board' ? (
         <BeatBoardView
           parentNode={node}
@@ -374,6 +444,23 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             selectNode(beatId);
           }}
           beatTypeLabel="Scene"
+        />
+      ) : viewMode === 'shotlist' ? (
+        <ShotListTableView
+          scene={currentScene}
+          scenes={scenes}
+          onSelectScene={setUserSelectedSceneId}
+          onOpenReel={(id) => {
+            if (id) setActiveShotId(id);
+            setIsReelOpen(true);
+          }}
+        />
+      ) : viewMode === 'breakdown' ? (
+        <BreakdownSheetView
+          scene={currentScene}
+          scenes={scenes}
+          onSelectScene={setUserSelectedSceneId}
+          screenplayNode={node}
         />
       ) : (
         <div className="flex-1 flex overflow-hidden">
@@ -452,6 +539,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                     const character = characterId ? characters[characterId] : null;
                     const characterName =
                       block.properties?.character_name || character?.name || 'CHARACTER';
+                    const blockBreakdownElements = getBlockBreakdownElements(block.id);
 
                     if (block.type === 'action') {
                       return (
@@ -480,6 +568,26 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                             </div>
 
                             <div className="flex items-center space-x-2">
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenTagPopover(block.id)}
+                                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
+                                  title="Tag production element (Prop, Costume, VFX, SFX, Location)"
+                                >
+                                  <Tag className="w-2.5 h-2.5 text-cyan-400" />
+                                  <span>Tag Element</span>
+                                </button>
+                                {activeTagPopoverBlockId === block.id && (
+                                  <BreakdownTagPopover
+                                    blockId={block.id}
+                                    isOpen={true}
+                                    onClose={() => setActiveTagPopoverBlockId(null)}
+                                    initialName={popoverInitialText}
+                                  />
+                                )}
+                              </div>
+
                               {activeShot && (
                                 <button
                                   onClick={() => handleToggleCoverage(block.id)}
@@ -519,6 +627,18 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                             rows={Math.max(2, block.content.split('\n').length)}
                             className="w-full bg-transparent resize-none focus:outline-none text-slate-200 placeholder-slate-600 leading-relaxed font-mono"
                           />
+
+                          {blockBreakdownElements.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-slate-800/60">
+                              {blockBreakdownElements.map((el) => (
+                                <BreakdownBadge
+                                  key={el.id}
+                                  element={el}
+                                  onRemove={() => untagBlockFromElement(block.id, el.id)}
+                                />
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -547,6 +667,26 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                             </div>
 
                             <div className="flex items-center space-x-2">
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenTagPopover(block.id)}
+                                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
+                                  title="Tag production element (Prop, Costume, VFX, SFX, Location)"
+                                >
+                                  <Tag className="w-2.5 h-2.5 text-cyan-400" />
+                                  <span>Tag Element</span>
+                                </button>
+                                {activeTagPopoverBlockId === block.id && (
+                                  <BreakdownTagPopover
+                                    blockId={block.id}
+                                    isOpen={true}
+                                    onClose={() => setActiveTagPopoverBlockId(null)}
+                                    initialName={popoverInitialText}
+                                  />
+                                )}
+                              </div>
+
                               {activeShot && (
                                 <button
                                   onClick={() => handleToggleCoverage(block.id)}
@@ -646,6 +786,18 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                               className="w-full bg-transparent resize-none font-mono text-sm text-center leading-relaxed text-slate-200 focus:outline-none placeholder-slate-600"
                             />
                           </div>
+
+                          {blockBreakdownElements.length > 0 && (
+                            <div className="flex flex-wrap justify-center gap-1.5 mt-3 pt-2 border-t border-slate-800/60">
+                              {blockBreakdownElements.map((el) => (
+                                <BreakdownBadge
+                                  key={el.id}
+                                  element={el}
+                                  onRemove={() => untagBlockFromElement(block.id, el.id)}
+                                />
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -788,13 +940,40 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-400 uppercase">Storyboard Image URL (optional)</label>
+                <label className="text-[10px] text-slate-400 uppercase">Storyboard Frame Image</label>
+                <div
+                  onClick={() => newShotFileInputRef.current?.click()}
+                  className="mt-1 border border-dashed border-slate-700 hover:border-cyan-500 rounded p-2 text-center cursor-pointer bg-slate-950/60 transition-colors"
+                >
+                  {newShotFile ? (
+                    <div className="flex items-center justify-center space-x-1.5 text-xs text-cyan-300 font-mono">
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="truncate max-w-[200px]">{newShotFile.name}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center space-x-1.5 text-xs text-slate-400 font-mono">
+                      <Upload className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Upload Frame Image (or enter URL below)</span>
+                    </div>
+                  )}
+                  <input
+                    ref={newShotFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setNewShotFile(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </div>
                 <input
                   type="url"
                   value={newShotUrl}
                   onChange={(e) => setNewShotUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-cyan-500"
+                  placeholder="Or paste image URL (https://...)"
+                  className="w-full mt-1.5 px-2 py-1 bg-slate-950 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
@@ -858,25 +1037,77 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                       </div>
                     </div>
 
-                    {/* Storyboard Frame Image */}
-                    {shot.storyboard_url ? (
-                      <div className="relative aspect-video rounded-lg overflow-hidden border border-slate-800 mb-2.5 bg-slate-950 group-hover:border-slate-700 transition-colors">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={shot.storyboard_url}
-                          alt={`Shot ${shot.shot_number}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-                        <div className="absolute bottom-1.5 left-2 text-[10px] font-mono text-white/90">
-                          {shot.lens || 'Prime'}
+                    {/* Storyboard Frame Image with Live Upload */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        shotSidebarFileInputRefs.current[shot.id]?.click();
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (e.dataTransfer.files && e.dataTransfer.files[0] && currentScene) {
+                          setIsUploadingSidebarShotId(shot.id);
+                          try {
+                            await uploadShotStoryboard(shot.id, e.dataTransfer.files[0], currentScene.id);
+                          } finally {
+                            setIsUploadingSidebarShotId(null);
+                          }
+                        }
+                      }}
+                      className="relative aspect-video rounded-lg overflow-hidden border border-slate-800 mb-2.5 bg-slate-950 group-hover:border-cyan-500/60 transition-colors cursor-pointer flex items-center justify-center"
+                      title="Click or drag image to upload storyboard frame"
+                    >
+                      {shot.storyboard_url ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={shot.storyboard_url}
+                            alt={`Shot ${shot.shot_number}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+                          <div className="absolute bottom-1.5 left-2 text-[10px] font-mono text-white/90">
+                            {shot.lens || 'Prime'}
+                          </div>
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-[10px] text-white space-x-1">
+                            <Upload className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Change Image</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-slate-600 group-hover:text-cyan-400 transition-colors">
+                          {isUploadingSidebarShotId === shot.id ? (
+                            <span className="text-[10px] text-cyan-400 font-mono animate-pulse">Uploading...</span>
+                          ) : (
+                            <>
+                              <Upload className="w-5 h-5 mb-1 opacity-60" />
+                              <span className="text-[9px] font-mono uppercase">Upload Frame</span>
+                            </>
+                          )}
                         </div>
-                      </div>
-                    ) : (
-                      <div className="aspect-video rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center mb-2.5">
-                        <Camera className="w-6 h-6 text-slate-700" />
-                      </div>
-                    )}
+                      )}
+
+                      <input
+                        ref={(el) => {
+                          shotSidebarFileInputRefs.current[shot.id] = el;
+                        }}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          if (e.target.files && e.target.files[0] && currentScene) {
+                            setIsUploadingSidebarShotId(shot.id);
+                            try {
+                              await uploadShotStoryboard(shot.id, e.target.files[0], currentScene.id);
+                            } finally {
+                              setIsUploadingSidebarShotId(null);
+                            }
+                          }
+                        }}
+                      />
+                    </div>
 
                     {/* Metadata Footer */}
                     <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">

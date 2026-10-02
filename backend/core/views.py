@@ -1,14 +1,23 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Q
-from core.models import Workspace, WorkspaceNode, Character, Shot, ShotBlockCoverage
+from core.models import (
+    Workspace,
+    WorkspaceNode,
+    Character,
+    Shot,
+    ShotBlockCoverage,
+    BreakdownElement,
+)
 from core.serializers import (
     WorkspaceSerializer,
     WorkspaceNodeSerializer,
     CharacterSerializer,
     ShotSerializer,
     ShotBlockCoverageSerializer,
+    BreakdownElementSerializer,
 )
 
 
@@ -105,7 +114,48 @@ class ShotViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(scene_id=scene_id)
         return queryset
 
+    @action(
+        detail=True,
+        methods=["post"],
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_image(self, request, pk=None):
+        shot = self.get_object()
+        file_obj = request.FILES.get("file") or request.FILES.get("image")
+        if not file_obj:
+            return Response(
+                {"error": "No file uploaded"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        shot.storyboard_file = file_obj
+        shot.save()
+
+        if shot.storyboard_file:
+            file_url = request.build_absolute_uri(shot.storyboard_file.url)
+            shot.storyboard_url = file_url
+            shot.save(update_fields=["storyboard_url"])
+
+        serializer = self.get_serializer(shot)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class ShotBlockCoverageViewSet(viewsets.ModelViewSet):
     queryset = ShotBlockCoverage.objects.all()
     serializer_class = ShotBlockCoverageSerializer
+
+
+class BreakdownElementViewSet(viewsets.ModelViewSet):
+    queryset = BreakdownElement.objects.all().prefetch_related("blocks")
+    serializer_class = BreakdownElementSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        workspace_id = self.request.query_params.get("workspace_id")
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+        category = self.request.query_params.get("category")
+        if category:
+            queryset = queryset.filter(category=category.upper())
+        return queryset
+

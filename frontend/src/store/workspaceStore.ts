@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Workspace, WorkspaceNode, Character, Shot } from '@/types/workspace';
+import { Workspace, WorkspaceNode, Character, Shot, BreakdownElement } from '@/types/workspace';
 import {
   fetchWorkspaces,
   fetchNodes,
@@ -9,9 +9,16 @@ import {
   updateNode,
   deleteNode as apiDeleteNode,
   createShot,
+  updateShot,
+  deleteShot,
   createShotCoverage,
   createCharacter,
   fetchSubtree,
+  fetchBreakdownElements,
+  createBreakdownElement,
+  updateBreakdownElement,
+  deleteBreakdownElement,
+  uploadShotImage,
 } from '@/lib/api';
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -26,12 +33,20 @@ interface WorkspaceState {
   expandedNodeIds: string[];
   characters: Record<string, Character>;
   shotsByScene: Record<string, Shot[]>;
+  breakdownElements: Record<string, BreakdownElement>;
   isLoading: boolean;
   saveStatus: 'idle' | 'saving' | 'saved';
   error: string | null;
   lastError: string | null;
 
   // Actions
+  loadBreakdownElements: (workspaceId?: string) => Promise<BreakdownElement[]>;
+  addBreakdownElement: (data: Partial<BreakdownElement>) => Promise<BreakdownElement | null>;
+  updateBreakdownElementItem: (id: string, data: Partial<BreakdownElement>) => Promise<BreakdownElement | null>;
+  removeBreakdownElement: (id: string) => Promise<void>;
+  tagBlockWithElement: (blockId: string, elementId: string) => Promise<void>;
+  untagBlockFromElement: (blockId: string, elementId: string) => Promise<void>;
+  uploadShotStoryboard: (shotId: string, file: File, sceneId: string) => Promise<Shot | null>;
   clearLastError: () => void;
   loadSubtree: (nodeId: string) => Promise<WorkspaceNode[]>;
   loadWorkspace: (slug: string) => Promise<void>;
@@ -74,8 +89,15 @@ interface WorkspaceState {
       lens: string;
       duration_seconds: number;
       storyboard_url?: string;
+      movement?: string;
     }
   ) => Promise<Shot | null>;
+  updateSceneShot: (
+    shotId: string,
+    data: Partial<Shot>,
+    sceneId: string
+  ) => Promise<Shot | null>;
+  removeShot: (shotId: string, sceneId: string) => Promise<void>;
   attachBlockToShot: (
     shotId: string,
     blockId: string,
@@ -99,6 +121,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   expandedNodeIds: [],
   characters: {},
   shotsByScene: {},
+  breakdownElements: {},
   isLoading: false,
   saveStatus: 'idle',
   error: null,
@@ -120,9 +143,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         return;
       }
 
-      const [rootNodes, characterList] = await Promise.all([
+      const [rootNodes, characterList, breakdownList] = await Promise.all([
         fetchNodes(workspace.id, null),
         fetchCharacters(workspace.id).catch(() => [] as Character[]),
+        fetchBreakdownElements(workspace.id).catch(() => [] as BreakdownElement[]),
       ]);
 
       const normalizedNodes: Record<string, WorkspaceNode> = {};
@@ -138,6 +162,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         characterMap[char.id] = char;
       });
 
+      const breakdownMap: Record<string, BreakdownElement> = {};
+      breakdownList.forEach((el) => {
+        breakdownMap[el.id] = el;
+      });
+
       const firstRootId = rootIds[0] || null;
 
       set({
@@ -146,6 +175,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         rootNodeIds: rootIds,
         selectedNodeId: firstRootId,
         characters: characterMap,
+        breakdownElements: breakdownMap,
         isLoading: false,
       });
 
@@ -584,6 +614,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
+  updateSceneShot: async (shotId, data, sceneId) => {
+    try {
+      const updated = await updateShot(shotId, data);
+      await get().loadSceneShots(sceneId);
+      return updated;
+    } catch (err) {
+      console.error('Failed to update shot', err);
+      return null;
+    }
+  },
+
+  removeShot: async (shotId, sceneId) => {
+    try {
+      await deleteShot(shotId);
+      await get().loadSceneShots(sceneId);
+    } catch (err) {
+      console.error('Failed to delete shot', err);
+    }
+  },
+
   attachBlockToShot: async (shotId, blockId, sceneId) => {
     try {
       await createShotCoverage(shotId, blockId);
@@ -694,6 +744,96 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch (err) {
       console.error('Failed to load subtree', err);
       return [];
+    }
+  },
+
+  loadBreakdownElements: async (workspaceId?: string) => {
+    const wsId = workspaceId || get().currentWorkspace?.id;
+    if (!wsId) return [];
+    try {
+      const elements = await fetchBreakdownElements(wsId);
+      const elementsMap: Record<string, BreakdownElement> = {};
+      elements.forEach((el) => {
+        elementsMap[el.id] = el;
+      });
+      set({ breakdownElements: elementsMap });
+      return elements;
+    } catch (err) {
+      console.error('Failed to load breakdown elements', err);
+      return [];
+    }
+  },
+
+  addBreakdownElement: async (data: Partial<BreakdownElement>) => {
+    const wsId = data.workspace || get().currentWorkspace?.id;
+    if (!wsId) return null;
+    try {
+      const created = await createBreakdownElement({ ...data, workspace: wsId });
+      set({
+        breakdownElements: {
+          ...get().breakdownElements,
+          [created.id]: created,
+        },
+      });
+      return created;
+    } catch (err) {
+      console.error('Failed to add breakdown element', err);
+      return null;
+    }
+  },
+
+  updateBreakdownElementItem: async (id: string, data: Partial<BreakdownElement>) => {
+    try {
+      const updated = await updateBreakdownElement(id, data);
+      set({
+        breakdownElements: {
+          ...get().breakdownElements,
+          [id]: updated,
+        },
+      });
+      return updated;
+    } catch (err) {
+      console.error('Failed to update breakdown element', err);
+      return null;
+    }
+  },
+
+  removeBreakdownElement: async (id: string) => {
+    try {
+      await deleteBreakdownElement(id);
+      const nextMap = { ...get().breakdownElements };
+      delete nextMap[id];
+      set({ breakdownElements: nextMap });
+    } catch (err) {
+      console.error('Failed to delete breakdown element', err);
+    }
+  },
+
+  tagBlockWithElement: async (blockId: string, elementId: string) => {
+    const element = get().breakdownElements[elementId];
+    if (!element) return;
+    const currentBlockIds = element.block_ids || [];
+    if (currentBlockIds.includes(blockId)) return;
+    const newBlockIds = [...currentBlockIds, blockId];
+    await get().updateBreakdownElementItem(elementId, { block_ids: newBlockIds });
+  },
+
+  untagBlockFromElement: async (blockId: string, elementId: string) => {
+    const element = get().breakdownElements[elementId];
+    if (!element) return;
+    const currentBlockIds = element.block_ids || [];
+    const newBlockIds = currentBlockIds.filter((id) => id !== blockId);
+    await get().updateBreakdownElementItem(elementId, { block_ids: newBlockIds });
+  },
+
+  uploadShotStoryboard: async (shotId: string, file: File, sceneId: string) => {
+    try {
+      const updatedShot = await uploadShotImage(shotId, file);
+      await get().loadSceneShots(sceneId);
+      return updatedShot;
+    } catch (err) {
+      console.error('Failed to upload shot storyboard', err);
+      return null;
     }
   },
 }));

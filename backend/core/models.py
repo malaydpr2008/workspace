@@ -62,6 +62,7 @@ class Shot(models.Model):
     shot_type = models.CharField(max_length=64, blank=True)
     lens = models.CharField(max_length=64, blank=True)
     storyboard_url = models.URLField(blank=True)
+    storyboard_file = models.FileField(upload_to="storyboards/", blank=True, null=True)
     duration_seconds = models.FloatField(default=0.0)
     blocks = models.ManyToManyField(
         WorkspaceNode, through="ShotBlockCoverage", related_name="covered_by_shots"
@@ -82,3 +83,32 @@ class ShotBlockCoverage(models.Model):
 
     def __str__(self):
         return f"{self.shot} -> {self.block} (#{self.order_index})"
+
+
+class BreakdownElement(models.Model):
+    CATEGORY_CHOICES = [
+        ("PROP", "Prop"),
+        ("COSTUME", "Costume"),
+        ("VFX", "VFX"),
+        ("SFX", "SFX"),
+        ("LOCATION", "Location"),
+        ("VEHICLE", "Vehicle"),
+        ("MAKEUP", "Makeup"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        Workspace, on_delete=models.CASCADE, related_name="breakdown_elements"
+    )
+    category = models.CharField(max_length=32, choices=CATEGORY_CHOICES)
+    name = models.CharField(max_length=150)
+    notes = models.TextField(blank=True)
+    blocks = models.ManyToManyField(
+        WorkspaceNode, related_name="breakdown_elements", blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"[{self.category}] {self.name}"
+

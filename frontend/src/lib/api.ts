@@ -1,4 +1,4 @@
-import { Workspace, WorkspaceNode, Character, Shot } from '@/types/workspace';
+import { Workspace, WorkspaceNode, Character, Shot, BreakdownElement } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
@@ -108,6 +108,27 @@ export async function createShot(shotData: Partial<Shot>): Promise<Shot> {
   return handleResponse<Shot>(res);
 }
 
+export async function updateShot(shotId: string, data: Partial<Shot>): Promise<Shot> {
+  const res = await fetch(`${API_BASE_URL}/shots/${shotId}/`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<Shot>(res);
+}
+
+export async function deleteShot(shotId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/shots/${shotId}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete shot failed [${res.status}]: ${errorBody}`);
+  }
+}
+
 export async function createShotCoverage(
   shotId: string,
   blockId: string,
@@ -158,6 +179,65 @@ export async function searchWorkspaceNodes(
   });
   return handleResponse<WorkspaceNode[]>(res);
 }
+
+export async function fetchBreakdownElements(
+  workspaceId?: string,
+  category?: string
+): Promise<BreakdownElement[]> {
+  const url = new URL(`${API_BASE_URL}/breakdown-elements/`);
+  if (workspaceId) url.searchParams.set('workspace_id', workspaceId);
+  if (category) url.searchParams.set('category', category);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<BreakdownElement[]>(res);
+}
+
+export async function createBreakdownElement(
+  data: Partial<BreakdownElement>
+): Promise<BreakdownElement> {
+  const res = await fetch(`${API_BASE_URL}/breakdown-elements/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<BreakdownElement>(res);
+}
+
+export async function updateBreakdownElement(
+  id: string,
+  data: Partial<BreakdownElement>
+): Promise<BreakdownElement> {
+  const res = await fetch(`${API_BASE_URL}/breakdown-elements/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<BreakdownElement>(res);
+}
+
+export async function deleteBreakdownElement(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/breakdown-elements/${id}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete breakdown element failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function uploadShotImage(
+  shotId: string,
+  file: File
+): Promise<Shot> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${API_BASE_URL}/shots/${shotId}/upload_image/`, {
+    method: 'POST',
+    body: formData,
+  });
+  return handleResponse<Shot>(res);
+}
+
 
 
 
