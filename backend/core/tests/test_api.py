@@ -12,6 +12,8 @@ from core.models import (
     ShootingSchedule,
     ShootingDay,
     StripboardItem,
+    ScriptNote,
+    ProductionTake,
 )
 
 
@@ -422,4 +424,133 @@ class ShootingScheduleAPITests(APITestCase):
         filter_resp = self.client.get(f"{strip_url}?schedule={sched_id}")
         self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(filter_resp.data), 2)
+
+
+class ScriptNoteAndProductionTakeAPITests(APITestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Studio One", slug="studio-one")
+        self.script = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            type="screenplay",
+            title="Dark Matter",
+            rank="0|h0:",
+        )
+        self.scene = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.script,
+            type="scene",
+            title="INT. BRIDGE - NIGHT",
+            rank="0|h1:",
+        )
+        self.dialogue = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.scene,
+            type="dialogue",
+            content="Shields failing.",
+            rank="0|h2:",
+        )
+        self.shot = Shot.objects.create(
+            scene=self.scene,
+            shot_number="1A",
+            shot_type="CLOSE-UP",
+            lens="50mm",
+            duration_seconds=4.5,
+        )
+
+    def test_script_note_creation_reply_and_resolve(self):
+        note_url = reverse("scriptnote-list")
+        
+        # 1. Create root note
+        create_resp = self.client.post(
+            note_url,
+            {
+                "node": str(self.dialogue.id),
+                "author_name": "Denis V.",
+                "author_role": "DIRECTOR",
+                "category": "DIRECTOR",
+                "text": "Deliver this with whisper pacing.",
+            },
+            format="json",
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        note_id = create_resp.data["id"]
+        self.assertEqual(create_resp.data["category"], "DIRECTOR")
+        self.assertFalse(create_resp.data["is_resolved"])
+
+        # 2. Create threaded reply
+        reply_resp = self.client.post(
+            note_url,
+            {
+                "node": str(self.dialogue.id),
+                "parent_note": note_id,
+                "author_name": "Timothee C.",
+                "author_role": "WRITER",
+                "category": "CREATIVE",
+                "text": "Understood, will emphasize vulnerability.",
+            },
+            format="json",
+        )
+        self.assertEqual(reply_resp.status_code, status.HTTP_201_CREATED)
+
+        # 3. Retrieve root note with replies
+        detail_resp = self.client.get(reverse("scriptnote-detail", kwargs={"pk": note_id}))
+        self.assertEqual(detail_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(detail_resp.data["replies"]), 1)
+        self.assertEqual(detail_resp.data["replies"][0]["author_name"], "Timothee C.")
+
+        # 4. Toggle resolve action
+        resolve_url = reverse("scriptnote-toggle-resolve", kwargs={"pk": note_id})
+        toggle_resp = self.client.post(resolve_url)
+        self.assertEqual(toggle_resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(toggle_resp.data["is_resolved"])
+
+    def test_production_take_logging_and_circle_toggle(self):
+        take_url = reverse("productiontake-list")
+
+        # 1. Create Take 1
+        take1_resp = self.client.post(
+            take_url,
+            {
+                "shot": str(self.shot.id),
+                "take_number": 1,
+                "status": "FALSE_START",
+                "camera_roll": "A01",
+                "sound_roll": "SR01",
+                "duration_seconds": 2.0,
+                "notes": "Actor stumbled on first word.",
+            },
+            format="json",
+        )
+        self.assertEqual(take1_resp.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(take1_resp.data["is_circle_take"])
+
+        # 2. Create Take 2
+        take2_resp = self.client.post(
+            take_url,
+            {
+                "shot": str(self.shot.id),
+                "take_number": 2,
+                "status": "COMPLETE",
+                "camera_roll": "A01",
+                "sound_roll": "SR01",
+                "duration_seconds": 5.2,
+                "notes": "Stunning delivery, print this.",
+                "is_circle_take": True,
+            },
+            format="json",
+        )
+        self.assertEqual(take2_resp.status_code, status.HTTP_201_CREATED)
+        take2_id = take2_resp.data["id"]
+        self.assertTrue(take2_resp.data["is_circle_take"])
+
+        # 3. Toggle circle take
+        circle_url = reverse("productiontake-toggle-circle", kwargs={"pk": take2_id})
+        toggle_resp = self.client.post(circle_url)
+        self.assertEqual(toggle_resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(toggle_resp.data["is_circle_take"])
+
+        # 4. Filter takes by shot
+        list_resp = self.client.get(f"{take_url}?shot={self.shot.id}")
+        self.assertEqual(list_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(list_resp.data), 2)
 

@@ -10,6 +10,8 @@ import {
   ShootingSchedule,
   ShootingDay,
   StripboardItem,
+  ScriptNote,
+  ProductionTake,
 } from '@/types/workspace';
 import {
   fetchWorkspaces,
@@ -44,6 +46,15 @@ import {
   updateStripboardItem,
   deleteStripboardItem,
   reorderStripboardItems,
+  fetchScriptNotes,
+  createScriptNote,
+  toggleResolveNote,
+  deleteScriptNote,
+  fetchTakesForShot,
+  createProductionTake,
+  updateProductionTake,
+  toggleCircleTake,
+  deleteProductionTake,
 } from '@/lib/api';
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -64,6 +75,8 @@ interface WorkspaceState {
   activeScheduleId: string | null;
   shootingDays: ShootingDay[];
   stripboardItems: StripboardItem[];
+  notesByNode: Record<string, ScriptNote[]>;
+  takesByShot: Record<string, ProductionTake[]>;
   isLoading: boolean;
   saveStatus: 'idle' | 'saving' | 'saved';
   error: string | null;
@@ -170,6 +183,24 @@ interface WorkspaceState {
   deleteStripItem: (id: string) => Promise<void>;
   reorderStrips: (items: { id: string; order: number; shooting_day?: string | null }[]) => Promise<void>;
   populateStripsFromScenes: (scheduleId: string, sceneIds: string[]) => Promise<void>;
+  loadNotesForNode: (nodeId: string) => Promise<ScriptNote[]>;
+  loadNotesForWorkspace: (workspaceId: string) => Promise<ScriptNote[]>;
+  createScriptNoteItem: (
+    data: Partial<ScriptNote> & { node: string; author_name: string; text: string }
+  ) => Promise<ScriptNote | null>;
+  toggleResolveScriptNoteItem: (noteId: string, nodeId: string) => Promise<ScriptNote | null>;
+  deleteScriptNoteItem: (noteId: string, nodeId: string) => Promise<void>;
+  loadTakesForShot: (shotId: string) => Promise<ProductionTake[]>;
+  createProductionTakeItem: (
+    data: Partial<ProductionTake> & { shot: string; take_number: number }
+  ) => Promise<ProductionTake | null>;
+  updateProductionTakeItem: (
+    takeId: string,
+    data: Partial<ProductionTake>,
+    shotId: string
+  ) => Promise<ProductionTake | null>;
+  toggleCircleTakeItem: (takeId: string, shotId: string) => Promise<ProductionTake | null>;
+  deleteProductionTakeItem: (takeId: string, shotId: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -187,6 +218,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activeScheduleId: null,
   shootingDays: [],
   stripboardItems: [],
+  notesByNode: {},
+  takesByShot: {},
   isLoading: false,
   saveStatus: 'idle',
   error: null,
@@ -1163,6 +1196,207 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       set({ stripboardItems: refreshed.sort((a, b) => a.order - b.order) });
     } catch (err) {
       console.error('Failed to populate strips from scenes', err);
+    }
+  },
+
+  loadNotesForNode: async (nodeId: string) => {
+    try {
+      const list = await fetchScriptNotes(nodeId);
+      set((state) => ({
+        notesByNode: {
+          ...state.notesByNode,
+          [nodeId]: list,
+        },
+      }));
+      return list;
+    } catch (err) {
+      console.error('Failed to load notes for node', nodeId, err);
+      return [];
+    }
+  },
+
+  loadNotesForWorkspace: async (workspaceId: string) => {
+    try {
+      const list = await fetchScriptNotes(undefined, workspaceId);
+      const grouped: Record<string, ScriptNote[]> = {};
+      list.forEach((n) => {
+        const nid = n.node;
+        if (!grouped[nid]) grouped[nid] = [];
+        grouped[nid].push(n);
+      });
+      set((state) => ({
+        notesByNode: {
+          ...state.notesByNode,
+          ...grouped,
+        },
+      }));
+      return list;
+    } catch (err) {
+      console.error('Failed to load notes for workspace', workspaceId, err);
+      return [];
+    }
+  },
+
+  createScriptNoteItem: async (data) => {
+    try {
+      const created = await createScriptNote(data);
+      const nodeId = data.node;
+      set((state) => {
+        const current = state.notesByNode[nodeId] || [];
+        if (data.parent_note) {
+          return {
+            notesByNode: {
+              ...state.notesByNode,
+              [nodeId]: current.map((n) =>
+                n.id === data.parent_note
+                  ? { ...n, replies: [...(n.replies || []), created] }
+                  : n
+              ),
+            },
+          };
+        }
+        return {
+          notesByNode: {
+            ...state.notesByNode,
+            [nodeId]: [...current, created],
+          },
+        };
+      });
+      return created;
+    } catch (err) {
+      console.error('Failed to create script note', err);
+      return null;
+    }
+  },
+
+  toggleResolveScriptNoteItem: async (noteId: string, nodeId: string) => {
+    try {
+      const updated = await toggleResolveNote(noteId);
+      set((state) => {
+        const current = state.notesByNode[nodeId] || [];
+        return {
+          notesByNode: {
+            ...state.notesByNode,
+            [nodeId]: current.map((n) =>
+              n.id === noteId ? { ...n, is_resolved: updated.is_resolved } : n
+            ),
+          },
+        };
+      });
+      return updated;
+    } catch (err) {
+      console.error('Failed to toggle resolve script note', err);
+      return null;
+    }
+  },
+
+  deleteScriptNoteItem: async (noteId: string, nodeId: string) => {
+    try {
+      await deleteScriptNote(noteId);
+      set((state) => {
+        const current = state.notesByNode[nodeId] || [];
+        return {
+          notesByNode: {
+            ...state.notesByNode,
+            [nodeId]: current.filter((n) => n.id !== noteId),
+          },
+        };
+      });
+    } catch (err) {
+      console.error('Failed to delete script note', err);
+    }
+  },
+
+  loadTakesForShot: async (shotId: string) => {
+    try {
+      const list = await fetchTakesForShot(shotId);
+      set((state) => ({
+        takesByShot: {
+          ...state.takesByShot,
+          [shotId]: list.sort((a, b) => a.take_number - b.take_number),
+        },
+      }));
+      return list;
+    } catch (err) {
+      console.error('Failed to load takes for shot', shotId, err);
+      return [];
+    }
+  },
+
+  createProductionTakeItem: async (data) => {
+    try {
+      const created = await createProductionTake(data);
+      const shotId = data.shot;
+      set((state) => {
+        const current = state.takesByShot[shotId] || [];
+        return {
+          takesByShot: {
+            ...state.takesByShot,
+            [shotId]: [...current, created].sort((a, b) => a.take_number - b.take_number),
+          },
+        };
+      });
+      return created;
+    } catch (err) {
+      console.error('Failed to create production take', err);
+      return null;
+    }
+  },
+
+  updateProductionTakeItem: async (takeId: string, data, shotId: string) => {
+    try {
+      const updated = await updateProductionTake(takeId, data);
+      set((state) => {
+        const current = state.takesByShot[shotId] || [];
+        return {
+          takesByShot: {
+            ...state.takesByShot,
+            [shotId]: current.map((t) => (t.id === takeId ? updated : t)),
+          },
+        };
+      });
+      return updated;
+    } catch (err) {
+      console.error('Failed to update production take', err);
+      return null;
+    }
+  },
+
+  toggleCircleTakeItem: async (takeId: string, shotId: string) => {
+    try {
+      const updated = await toggleCircleTake(takeId);
+      set((state) => {
+        const current = state.takesByShot[shotId] || [];
+        return {
+          takesByShot: {
+            ...state.takesByShot,
+            [shotId]: current.map((t) =>
+              t.id === takeId ? { ...t, is_circle_take: updated.is_circle_take } : t
+            ),
+          },
+        };
+      });
+      return updated;
+    } catch (err) {
+      console.error('Failed to toggle circle take', err);
+      return null;
+    }
+  },
+
+  deleteProductionTakeItem: async (takeId: string, shotId: string) => {
+    try {
+      await deleteProductionTake(takeId);
+      set((state) => {
+        const current = state.takesByShot[shotId] || [];
+        return {
+          takesByShot: {
+            ...state.takesByShot,
+            [shotId]: current.filter((t) => t.id !== takeId),
+          },
+        };
+      });
+    } catch (err) {
+      console.error('Failed to delete production take', err);
     }
   },
 }));

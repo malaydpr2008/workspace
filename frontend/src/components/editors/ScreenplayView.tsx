@@ -20,11 +20,13 @@ import {
   BarChart3,
   History,
   Calendar,
+  MessageSquare,
 } from 'lucide-react';
 import { WorkspaceNode, Shot, RevisionColor } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import {
   compileScreenplayToFountain,
+  compileScreenplayWithNotes,
   downloadFile,
   copyToClipboard,
 } from '@/lib/compiler';
@@ -42,6 +44,8 @@ import { ProductionAnalyticsView } from '@/components/analytics/ProductionAnalyt
 import { StripboardView } from '@/components/schedule/StripboardView';
 import { RevisionDraftSelector } from '@/components/editors/RevisionDraftSelector';
 import { VersionHistoryModal } from '@/components/history/VersionHistoryModal';
+import { ScriptNotesDrawer } from '@/components/notes/ScriptNotesDrawer';
+import { TakeLoggerModal } from '@/components/storyboard/TakeLoggerModal';
 import { exportProductionBibleZip } from '@/lib/productionBible';
 import {
   getRevisionConfig,
@@ -60,6 +64,9 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     shotsByScene,
     characters,
     breakdownElements,
+    currentWorkspace,
+    notesByNode,
+    loadNotesForWorkspace,
     loadBreakdownElements,
     loadSceneShots,
     loadNodeChildren,
@@ -87,6 +94,11 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
+  // Script Marginalia / Review Notes Drawer & Take Logger State
+  const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState(false);
+  const [notesAnchorNodeId, setNotesAnchorNodeId] = useState<string | null>(null);
+  const [takeLoggerShot, setTakeLoggerShot] = useState<Shot | null>(null);
 
   // Breakdown tag popover state
   const [activeTagPopoverBlockId, setActiveTagPopoverBlockId] = useState<string | null>(null);
@@ -127,6 +139,12 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   useEffect(() => {
     loadBreakdownElements();
   }, [loadBreakdownElements]);
+
+  useEffect(() => {
+    if (currentWorkspace?.id) {
+      loadNotesForWorkspace(currentWorkspace.id);
+    }
+  }, [currentWorkspace?.id, loadNotesForWorkspace]);
 
   useEffect(() => {
     if (activeSceneId) {
@@ -237,6 +255,29 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     const filename = `${(node.title || 'screenplay').toLowerCase().replace(/\s+/g, '_')}.txt`;
     downloadFile(content, filename, 'text/plain;charset=utf-8');
   };
+
+  const handleExportWithNotes = () => {
+    const content = compileScreenplayWithNotes(
+      node,
+      nodes,
+      childrenMap,
+      characters,
+      notesByNode
+    );
+    const filename = `${(node.title || 'screenplay').toLowerCase().replace(/\s+/g, '_')}_annotated_notes.fountain`;
+    downloadFile(content, filename, 'text/plain;charset=utf-8');
+  };
+
+  const totalNotesCount = useMemo(() => {
+    return Object.values(notesByNode).reduce((acc, list) => acc + list.length, 0);
+  }, [notesByNode]);
+
+  const totalUnresolvedNotesCount = useMemo(() => {
+    return Object.values(notesByNode).reduce(
+      (acc, list) => acc + list.filter((n) => !n.is_resolved).length,
+      0
+    );
+  }, [notesByNode]);
 
   const handleCopyClipboard = async () => {
     const content = compileScreenplayToFountain(node, nodes, childrenMap, characters);
@@ -557,12 +598,39 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             <span>Import Fountain</span>
           </button>
 
+          {/* Script Marginalia & Review Notes Drawer Toggle */}
+          <button
+            onClick={() => {
+              if (!notesAnchorNodeId && currentScene) {
+                setNotesAnchorNodeId(currentScene.id);
+              }
+              setIsNotesDrawerOpen(!isNotesDrawerOpen);
+            }}
+            className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono font-medium transition-all ${
+              isNotesDrawerOpen
+                ? 'bg-violet-600 text-white border-violet-500 shadow-sm'
+                : totalUnresolvedNotesCount > 0
+                ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+            }`}
+            title="Toggle Script Marginalia & Review Notes Drawer"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-violet-400" />
+            <span>Notes</span>
+            {totalNotesCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-violet-500/20 text-violet-300 font-bold border border-violet-500/30">
+                {totalNotesCount}
+              </span>
+            )}
+          </button>
+
           {/* Export Dropdown */}
           <DocumentExportButton
             primaryLabel="Export Fountain (.fountain)"
             primaryExtension="fountain"
             onExportPrimary={handleExportFountain}
             onExportPlainText={handleExportPlainText}
+            onExportWithNotes={handleExportWithNotes}
             onExportBible={handleExportProductionBible}
             onCopyClipboard={handleCopyClipboard}
             onPrint={() => window.print()}
@@ -699,6 +767,41 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
+                    {/* Scene Heading Notes Badge */}
+                    {(() => {
+                      const sceneNotes = notesByNode[currentScene.id] || [];
+                      return sceneNotes.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotesAnchorNodeId(currentScene.id);
+                            setIsNotesDrawerOpen(true);
+                          }}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-mono border flex items-center space-x-1 transition-all ${
+                            sceneNotes.some((n) => !n.is_resolved)
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          }`}
+                          title={`Scene heading has ${sceneNotes.length} review note(s)`}
+                        >
+                          <MessageSquare className="w-2.5 h-2.5" />
+                          <span>{sceneNotes.length}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotesAnchorNodeId(currentScene.id);
+                            setIsNotesDrawerOpen(true);
+                          }}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors flex items-center space-x-1"
+                          title="Add review note to scene heading"
+                        >
+                          <MessageSquare className="w-2.5 h-2.5" />
+                          <span>Note</span>
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -838,6 +941,45 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                                   </span>
                                 </button>
                               )}
+                              {/* Marginalia Comment Indicator */}
+                              {(() => {
+                                const blockNotes = notesByNode[block.id] || [];
+                                return blockNotes.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setNotesAnchorNodeId(block.id);
+                                      setIsNotesDrawerOpen(true);
+                                    }}
+                                    className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-mono border transition-all ${
+                                      blockNotes.some((n) => !n.is_resolved)
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 shadow-sm'
+                                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                    }`}
+                                    title={`View ${blockNotes.length} review note(s) for this block`}
+                                  >
+                                    <MessageSquare className="w-2.5 h-2.5" />
+                                    <span>{blockNotes.length}</span>
+                                    {blockNotes.some((n) => !n.is_resolved) && (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setNotesAnchorNodeId(block.id);
+                                      setIsNotesDrawerOpen(true);
+                                    }}
+                                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-500 hover:text-slate-300 hover:bg-slate-800/80 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Attach review note to this block"
+                                  >
+                                    <MessageSquare className="w-2.5 h-2.5" />
+                                    <span>Note</span>
+                                  </button>
+                                );
+                              })()}
+
                               <button
                                 onClick={() => deleteNode(block.id)}
                                 className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-400 p-0.5 transition-opacity"
@@ -981,6 +1123,45 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                                   </span>
                                 </button>
                               )}
+                              {/* Marginalia Comment Indicator */}
+                              {(() => {
+                                const blockNotes = notesByNode[block.id] || [];
+                                return blockNotes.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setNotesAnchorNodeId(block.id);
+                                      setIsNotesDrawerOpen(true);
+                                    }}
+                                    className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-mono border transition-all ${
+                                      blockNotes.some((n) => !n.is_resolved)
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 shadow-sm'
+                                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                    }`}
+                                    title={`View ${blockNotes.length} review note(s) for this block`}
+                                  >
+                                    <MessageSquare className="w-2.5 h-2.5" />
+                                    <span>{blockNotes.length}</span>
+                                    {blockNotes.some((n) => !n.is_resolved) && (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setNotesAnchorNodeId(block.id);
+                                      setIsNotesDrawerOpen(true);
+                                    }}
+                                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-500 hover:text-slate-300 hover:bg-slate-800/80 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Attach review note to this block"
+                                  >
+                                    <MessageSquare className="w-2.5 h-2.5" />
+                                    <span>Note</span>
+                                  </button>
+                                );
+                              })()}
+
                               <button
                                 onClick={() => deleteNode(block.id)}
                                 className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-400 p-0.5 transition-opacity"
@@ -1312,9 +1493,23 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                           {shot.shot_type || 'STANDARD'}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-1 text-[11px] text-slate-400 font-mono">
-                        <Clock className="w-3 h-3 text-amber-400" />
-                        <span>{shot.duration_seconds}s</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1 text-[11px] text-slate-400 font-mono">
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          <span>{shot.duration_seconds}s</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTakeLoggerShot(shot);
+                          }}
+                          className="flex items-center space-x-1 px-2 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-medium transition-colors"
+                          title="Open Production Take & Slate Logger"
+                        >
+                          <Clapperboard className="w-3 h-3 text-amber-400" />
+                          <span>Takes</span>
+                        </button>
                       </div>
                     </div>
 
@@ -1462,6 +1657,32 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         onClose={() => setIsHistoryModalOpen(false)}
         screenplayNode={node}
         currentNodes={screenplaySubtreeNodes}
+      />
+
+      {/* Anchored Script Marginalia Drawer */}
+      <ScriptNotesDrawer
+        isOpen={isNotesDrawerOpen}
+        onClose={() => setIsNotesDrawerOpen(false)}
+        activeNode={notesAnchorNodeId ? nodes[notesAnchorNodeId] || null : currentScene}
+        allSceneNodes={
+          currentScene
+            ? [
+                currentScene,
+                ...(childrenMap[currentScene.id] || [])
+                  .map((id) => nodes[id])
+                  .filter((n): n is WorkspaceNode => Boolean(n)),
+              ]
+            : []
+        }
+        onSelectNode={(nodeId) => setNotesAnchorNodeId(nodeId)}
+      />
+
+      {/* Production Take & Slate Logger Modal */}
+      <TakeLoggerModal
+        isOpen={Boolean(takeLoggerShot)}
+        onClose={() => setTakeLoggerShot(null)}
+        shot={takeLoggerShot}
+        scene={currentScene}
       />
     </div>
   );

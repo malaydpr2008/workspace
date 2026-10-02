@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, Copy, Check, FileDown, FileText, ChevronDown, Printer, Archive } from 'lucide-react';
+import { Download, Copy, Check, FileDown, FileText, ChevronDown, Printer, Archive, MessageSquare } from 'lucide-react';
 
 interface DocumentExportButtonProps {
   onExportPrimary: () => void;
   primaryLabel: string;
   primaryExtension: string;
   onExportPlainText?: () => void;
+  onExportWithNotes?: () => void;
   onExportBible?: () => void;
   onCopyClipboard: () => Promise<boolean>;
   onPrint?: () => void;
@@ -18,6 +19,7 @@ export const DocumentExportButton: React.FC<DocumentExportButtonProps> = ({
   primaryLabel,
   primaryExtension,
   onExportPlainText,
+  onExportWithNotes,
   onExportBible,
   onCopyClipboard,
   onPrint,
@@ -103,6 +105,22 @@ export const DocumentExportButton: React.FC<DocumentExportButtonProps> = ({
               <div className="truncate">
                 <div className="font-medium">Plain Text (.txt)</div>
                 <div className="text-[10px] text-slate-400 font-mono">Standard text file</div>
+              </div>
+            </button>
+          )}
+
+          {onExportWithNotes && (
+            <button
+              onClick={() => {
+                onExportWithNotes();
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-slate-200 hover:bg-slate-800 hover:text-white transition-colors text-left"
+            >
+              <MessageSquare className="w-4 h-4 text-violet-400 shrink-0" />
+              <div className="truncate">
+                <div className="font-medium">Script with Review Notes</div>
+                <div className="text-[10px] text-slate-400 font-mono">Annotated marginalia export</div>
               </div>
             </button>
           )}

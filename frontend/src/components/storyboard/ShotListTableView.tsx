@@ -11,9 +11,11 @@ import {
   Play,
   Link as LinkIcon,
   Printer,
+  Clapperboard,
 } from 'lucide-react';
 import { WorkspaceNode, Shot } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { TakeLoggerModal } from '@/components/storyboard/TakeLoggerModal';
 
 interface ShotListTableViewProps {
   scene: WorkspaceNode | null;
@@ -84,6 +86,7 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
   const [newShotDuration, setNewShotDuration] = useState('4.0');
   const [uploadingShotId, setUploadingShotId] = useState<string | null>(null);
   const [coverageModalShotId, setCoverageModalShotId] = useState<string | null>(null);
+  const [selectedTakeShot, setSelectedTakeShot] = useState<Shot | null>(null);
 
   // Hidden file input refs for each shot
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -586,6 +589,14 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
                             </button>
                           )}
                           <button
+                            onClick={() => setSelectedTakeShot(shot)}
+                            className="flex items-center space-x-1 px-2 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono font-medium transition-colors"
+                            title="Log production slates and takes"
+                          >
+                            <Clapperboard className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Takes</span>
+                          </button>
+                          <button
                             onClick={() => {
                               if (scene) removeShot(shot.id, scene.id);
                             }}
@@ -672,6 +683,15 @@ export const ShotListTableView: React.FC<ShotListTableViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Production Take Logger Modal */}
+      <TakeLoggerModal
+        isOpen={Boolean(selectedTakeShot)}
+        onClose={() => setSelectedTakeShot(null)}
+        shot={selectedTakeShot}
+        scene={scene}
+      />
+
       {/* Datalist for lens suggestions */}
       <datalist id="common-lenses-list">
         {COMMON_LENSES.map((lens) => (

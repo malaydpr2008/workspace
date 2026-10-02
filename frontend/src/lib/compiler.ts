@@ -1,4 +1,132 @@
-import { WorkspaceNode, Character } from '@/types/workspace';
+import { WorkspaceNode, Character, ScriptNote } from '@/types/workspace';
+
+/**
+ * Compiles a Screenplay composite node hierarchy with annotated review notes and marginalia
+ */
+export function compileScreenplayWithNotes(
+  rootNode: WorkspaceNode,
+  nodes: Record<string, WorkspaceNode>,
+  childrenMap: Record<string, string[]>,
+  characters: Record<string, Character>,
+  notesByNode: Record<string, ScriptNote[]>
+): string {
+  const lines: string[] = [];
+
+  // Title Page Header
+  const title = rootNode.title || 'UNTITLED SCREENPLAY';
+  const author = rootNode.properties?.author || 'Antigravity Studio';
+  const dateStr = new Date().toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  lines.push(`Title: ${title.toUpperCase()} (ANNOTATED REVIEW DRAFT)`);
+  lines.push(`Credit: written by`);
+  lines.push(`Author: ${author}`);
+  lines.push(`Draft date: ${dateStr}`);
+  lines.push(`Format: Feature Screenplay with Marginalia & Review Notes`);
+  lines.push('');
+  lines.push('===');
+  lines.push('');
+
+  const formatNotes = (nodeId: string, indent: string = '  '): string[] => {
+    const list = notesByNode[nodeId] || [];
+    if (list.length === 0) return [];
+
+    const noteLines: string[] = [];
+    noteLines.push('/*');
+    noteLines.push(`${indent}[[ REVIEW NOTES (${list.length}) ]]`);
+    list.forEach((n) => {
+      const status = n.is_resolved ? '[RESOLVED]' : '[OPEN]';
+      noteLines.push(
+        `${indent}• [${n.category}] ${status} ${n.author_name} (${n.author_role}): "${n.text}"`
+      );
+      if (n.replies && n.replies.length > 0) {
+        n.replies.forEach((rep) => {
+          noteLines.push(
+            `${indent}    ↳ ${rep.author_name} (${rep.author_role}): "${rep.text}"`
+          );
+        });
+      }
+    });
+    noteLines.push('*/');
+    noteLines.push('');
+    return noteLines;
+  };
+
+  // Collect scenes
+  const isScene = rootNode.type === 'scene';
+  const sceneIds = isScene
+    ? [rootNode.id]
+    : childrenMap[rootNode.id] || [];
+
+  sceneIds.forEach((sceneId) => {
+    const sceneNode = nodes[sceneId];
+    if (!sceneNode) return;
+
+    if (sceneNode.type === 'scene') {
+      const heading = (sceneNode.title || 'INT. SCENE - DAY').toUpperCase().trim();
+      const fountainHeading = /^(INT|EXT|EST|INT\/EXT|I\/E)\.?/i.test(heading)
+        ? heading
+        : `.${heading}`;
+
+      lines.push('');
+      lines.push(fountainHeading);
+      lines.push('');
+
+      // Scene heading notes
+      const sceneNotes = formatNotes(sceneNode.id);
+      if (sceneNotes.length > 0) {
+        lines.push(...sceneNotes);
+      }
+
+      // Iterate through scene blocks
+      const blockIds = childrenMap[sceneNode.id] || [];
+      blockIds.forEach((blockId) => {
+        const block = nodes[blockId];
+        if (!block) return;
+
+        if (block.type === 'action') {
+          if (block.content.trim()) {
+            lines.push(block.content.trim());
+            lines.push('');
+          }
+        } else if (block.type === 'dialogue') {
+          const charId = block.properties?.character_id;
+          const charName =
+            block.properties?.character_name ||
+            (charId ? characters[charId]?.name : null) ||
+            'CHARACTER';
+
+          lines.push(charName.toUpperCase().trim());
+
+          if (block.properties?.parenthetical?.trim()) {
+            lines.push(`(${block.properties.parenthetical.trim()})`);
+          }
+
+          if (block.content.trim()) {
+            lines.push(block.content.trim());
+          }
+          lines.push('');
+        } else {
+          if (block.content?.trim()) {
+            lines.push(block.content.trim());
+            lines.push('');
+          }
+        }
+
+        // Block level notes
+        const blockNotes = formatNotes(block.id);
+        if (blockNotes.length > 0) {
+          lines.push(...blockNotes);
+        }
+      });
+    }
+  });
+
+  return lines.join('\n');
+}
 
 /**
  * Compiles a Screenplay composite node hierarchy into standard Fountain syntax (.fountain)

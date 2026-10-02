@@ -11,6 +11,8 @@ from core.views import (
     ShootingScheduleViewSet,
     ShootingDayViewSet,
     StripboardItemViewSet,
+    ScriptNoteViewSet,
+    ProductionTakeViewSet,
 )
 
 router = DefaultRouter()
@@ -25,6 +27,10 @@ router.register(r"snapshots", DocumentSnapshotViewSet, basename="documentsnapsho
 router.register(r"schedules", ShootingScheduleViewSet, basename="shootingschedule")
 router.register(r"shooting-days", ShootingDayViewSet, basename="shootingday")
 router.register(r"stripboard-items", StripboardItemViewSet, basename="stripboarditem")
+router.register(r"notes", ScriptNoteViewSet, basename="scriptnote")
+router.register(r"script-notes", ScriptNoteViewSet, basename="scriptnotes")
+router.register(r"takes", ProductionTakeViewSet, basename="productiontake")
+router.register(r"production-takes", ProductionTakeViewSet, basename="productiontakes")
 
 urlpatterns = [
     path("", include(router.urls)),

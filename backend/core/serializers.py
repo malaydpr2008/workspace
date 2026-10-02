@@ -10,6 +10,8 @@ from core.models import (
     ShootingSchedule,
     ShootingDay,
     StripboardItem,
+    ScriptNote,
+    ProductionTake,
 )
 
 
@@ -162,4 +164,61 @@ class ShootingScheduleSerializer(serializers.ModelSerializer):
         if "workspace" not in attrs and "screenplay" in attrs:
             attrs["workspace"] = attrs["screenplay"].workspace
         return attrs
+
+
+class ScriptNoteSerializer(serializers.ModelSerializer):
+    workspace = serializers.PrimaryKeyRelatedField(
+        queryset=Workspace.objects.all(), required=False
+    )
+    replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ScriptNote
+        fields = [
+            "id",
+            "workspace",
+            "node",
+            "author_name",
+            "author_role",
+            "category",
+            "text",
+            "is_resolved",
+            "parent_note",
+            "replies",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def get_replies(self, obj):
+        if obj.parent_note_id is None:
+            replies = obj.replies.all().order_by("created_at")
+            return ScriptNoteSerializer(replies, many=True, context=self.context).data
+        return []
+
+    def validate(self, attrs):
+        if "workspace" not in attrs and "node" in attrs:
+            attrs["workspace"] = attrs["node"].workspace
+        elif "workspace" not in attrs and "parent_note" in attrs and attrs["parent_note"]:
+            attrs["workspace"] = attrs["parent_note"].workspace
+            if "node" not in attrs:
+                attrs["node"] = attrs["parent_note"].node
+        return attrs
+
+
+class ProductionTakeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductionTake
+        fields = [
+            "id",
+            "shot",
+            "take_number",
+            "is_circle_take",
+            "status",
+            "camera_roll",
+            "sound_roll",
+            "duration_seconds",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
 

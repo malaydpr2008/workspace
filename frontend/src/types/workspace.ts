@@ -131,3 +131,46 @@ export interface ShootingDay {
   strips?: StripboardItem[];
 }
 
+export type NoteCategory =
+  | 'CREATIVE'
+  | 'LEGAL'
+  | 'CONTINUITY'
+  | 'PRODUCTION'
+  | 'DIRECTOR';
+
+export type AuthorRole =
+  | 'DIRECTOR'
+  | 'PRODUCER'
+  | 'WRITER'
+  | 'LEGAL'
+  | 'SCRIPT_SUPERVISOR';
+
+export interface ScriptNote {
+  id: string;
+  workspace: string;
+  node: string;
+  author_name: string;
+  author_role: AuthorRole;
+  category: NoteCategory;
+  text: string;
+  is_resolved: boolean;
+  parent_note: string | null;
+  replies?: ScriptNote[];
+  created_at: string;
+}
+
+export type TakeStatus = 'COMPLETE' | 'INCOMPLETE' | 'FALSE_START';
+
+export interface ProductionTake {
+  id: string;
+  shot: string;
+  take_number: number;
+  is_circle_take: boolean;
+  status: TakeStatus;
+  camera_roll: string;
+  sound_roll: string;
+  duration_seconds: number;
+  notes: string;
+  created_at: string;
+}
+

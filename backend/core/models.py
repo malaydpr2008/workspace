@@ -225,3 +225,76 @@ class StripboardItem(models.Model):
             return f"[BANNER] {self.banner_title}"
         return f"Strip: {self.scene.title if self.scene else 'No Scene'} (Order {self.order})"
 
+
+class ScriptNote(models.Model):
+    ROLE_CHOICES = [
+        ("DIRECTOR", "Director"),
+        ("PRODUCER", "Producer"),
+        ("WRITER", "Writer"),
+        ("LEGAL", "Legal"),
+        ("SCRIPT_SUPERVISOR", "Script Supervisor"),
+    ]
+
+    CATEGORY_CHOICES = [
+        ("CREATIVE", "Creative"),
+        ("LEGAL", "Legal"),
+        ("CONTINUITY", "Continuity"),
+        ("PRODUCTION", "Production"),
+        ("DIRECTOR", "Director"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        Workspace, on_delete=models.CASCADE, related_name="script_notes"
+    )
+    node = models.ForeignKey(
+        WorkspaceNode, on_delete=models.CASCADE, related_name="notes"
+    )
+    author_name = models.CharField(max_length=120)
+    author_role = models.CharField(max_length=60, default="WRITER")
+    category = models.CharField(max_length=60, choices=CATEGORY_CHOICES, default="CREATIVE")
+    text = models.TextField()
+    is_resolved = models.BooleanField(default=False)
+    parent_note = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.CASCADE, related_name="replies"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["node", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.category}] {self.author_name} ({self.author_role}): {self.text[:30]}"
+
+
+class ProductionTake(models.Model):
+    STATUS_CHOICES = [
+        ("COMPLETE", "Complete"),
+        ("INCOMPLETE", "Incomplete"),
+        ("FALSE_START", "False Start"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    shot = models.ForeignKey(Shot, on_delete=models.CASCADE, related_name="takes")
+    take_number = models.PositiveIntegerField(default=1)
+    is_circle_take = models.BooleanField(default=False)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="COMPLETE")
+    camera_roll = models.CharField(max_length=50, blank=True)
+    sound_roll = models.CharField(max_length=50, blank=True)
+    duration_seconds = models.FloatField(default=0.0)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["take_number"]
+        indexes = [
+            models.Index(fields=["shot", "take_number"]),
+        ]
+
+    def __str__(self):
+        star = " ⭐" if self.is_circle_take else ""
+        return f"Shot {self.shot_id} - Take {self.take_number}{star}"
+

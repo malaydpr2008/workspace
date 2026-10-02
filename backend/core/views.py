@@ -15,6 +15,8 @@ from core.models import (
     ShootingSchedule,
     ShootingDay,
     StripboardItem,
+    ScriptNote,
+    ProductionTake,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -27,6 +29,8 @@ from core.serializers import (
     ShootingScheduleSerializer,
     ShootingDaySerializer,
     StripboardItemSerializer,
+    ScriptNoteSerializer,
+    ProductionTakeSerializer,
 )
 
 
@@ -324,5 +328,63 @@ class StripboardItemViewSet(viewsets.ModelViewSet):
                     StripboardItem.objects.filter(id=strip_id).update(**update_fields)
 
         return Response({"status": "reordered"}, status=status.HTTP_200_OK)
+
+
+class ScriptNoteViewSet(viewsets.ModelViewSet):
+    queryset = ScriptNote.objects.all()
+    serializer_class = ScriptNoteSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        node_id = self.request.query_params.get("node")
+        if node_id:
+            queryset = queryset.filter(node_id=node_id)
+
+        workspace_id = self.request.query_params.get("workspace")
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+
+        category = self.request.query_params.get("category")
+        if category:
+            queryset = queryset.filter(category=category)
+
+        is_resolved = self.request.query_params.get("is_resolved")
+        if is_resolved is not None:
+            if is_resolved.lower() in ("true", "1"):
+                queryset = queryset.filter(is_resolved=True)
+            elif is_resolved.lower() in ("false", "0"):
+                queryset = queryset.filter(is_resolved=False)
+
+        top_level = self.request.query_params.get("top_level")
+        if top_level is not None and top_level.lower() in ("true", "1"):
+            queryset = queryset.filter(parent_note__isnull=True)
+
+        return queryset
+
+    @action(detail=True, methods=["post"])
+    def toggle_resolve(self, request, pk=None):
+        note = self.get_object()
+        note.is_resolved = not note.is_resolved
+        note.save(update_fields=["is_resolved"])
+        return Response(ScriptNoteSerializer(note, context={"request": request}).data)
+
+
+class ProductionTakeViewSet(viewsets.ModelViewSet):
+    queryset = ProductionTake.objects.all()
+    serializer_class = ProductionTakeSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        shot_id = self.request.query_params.get("shot")
+        if shot_id:
+            queryset = queryset.filter(shot_id=shot_id)
+        return queryset
+
+    @action(detail=True, methods=["post"])
+    def toggle_circle(self, request, pk=None):
+        take = self.get_object()
+        take.is_circle_take = not take.is_circle_take
+        take.save(update_fields=["is_circle_take"])
+        return Response(ProductionTakeSerializer(take, context={"request": request}).data)
 
 

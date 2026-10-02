@@ -8,6 +8,8 @@ import {
   ShootingSchedule,
   ShootingDay,
   StripboardItem,
+  ScriptNote,
+  ProductionTake,
 } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -432,6 +434,104 @@ export async function reorderStripboardItems(
   if (!res.ok) {
     const errorBody = await res.text();
     throw new Error(`Reorder stripboard items failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+// -------------------------------------------------------------
+// Script Notes / Marginalia API
+// -------------------------------------------------------------
+
+export async function fetchScriptNotes(
+  nodeId?: string,
+  workspaceId?: string,
+  category?: string
+): Promise<ScriptNote[]> {
+  const url = new URL(`${API_BASE_URL}/notes/`);
+  if (nodeId) url.searchParams.set('node', nodeId);
+  if (workspaceId) url.searchParams.set('workspace', workspaceId);
+  if (category) url.searchParams.set('category', category);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<ScriptNote[]>(res);
+}
+
+export async function createScriptNote(
+  data: Partial<ScriptNote> & { node: string; author_name: string; text: string }
+): Promise<ScriptNote> {
+  const res = await fetch(`${API_BASE_URL}/notes/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ScriptNote>(res);
+}
+
+export async function toggleResolveNote(noteId: string): Promise<ScriptNote> {
+  const res = await fetch(`${API_BASE_URL}/notes/${noteId}/toggle_resolve/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return handleResponse<ScriptNote>(res);
+}
+
+export async function deleteScriptNote(noteId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/notes/${noteId}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete note failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+// -------------------------------------------------------------
+// Production Takes Logger API
+// -------------------------------------------------------------
+
+export async function fetchTakesForShot(shotId: string): Promise<ProductionTake[]> {
+  const url = new URL(`${API_BASE_URL}/takes/`);
+  url.searchParams.set('shot', shotId);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<ProductionTake[]>(res);
+}
+
+export async function createProductionTake(
+  data: Partial<ProductionTake> & { shot: string; take_number: number }
+): Promise<ProductionTake> {
+  const res = await fetch(`${API_BASE_URL}/takes/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ProductionTake>(res);
+}
+
+export async function updateProductionTake(
+  takeId: string,
+  data: Partial<ProductionTake>
+): Promise<ProductionTake> {
+  const res = await fetch(`${API_BASE_URL}/takes/${takeId}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ProductionTake>(res);
+}
+
+export async function toggleCircleTake(takeId: string): Promise<ProductionTake> {
+  const res = await fetch(`${API_BASE_URL}/takes/${takeId}/toggle_circle/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return handleResponse<ProductionTake>(res);
+}
+
+export async function deleteProductionTake(takeId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/takes/${takeId}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete take failed [${res.status}]: ${errorBody}`);
   }
 }
 
