@@ -1,0 +1,56 @@
+# =========================
+# Python & Django
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/venv/
+venv/
+ENV/
+env/
+*.sqlite3
+*.db
+local_settings.py
+backend/media/
+backend/staticfiles/
+.pytest_cache/
+.ruff_cache/
+
+# =========================
+# Node & Next.js
+# =========================
+frontend/node_modules/
+node_modules/
+frontend/.next/
+frontend/out/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# =========================
+# Environment & Secrets
+# =========================
+.env
+.env*.local
+*.env
+
+# =========================
+# Docker & Database
+# =========================
+pgdata/
+postgres_data/
+
+# =========================
+# IDE & Operating System
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
