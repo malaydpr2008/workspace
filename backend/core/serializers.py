@@ -7,6 +7,9 @@ from core.models import (
     ShotBlockCoverage,
     BreakdownElement,
     DocumentSnapshot,
+    ShootingSchedule,
+    ShootingDay,
+    StripboardItem,
 )
 
 
@@ -97,5 +100,66 @@ class DocumentSnapshotSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if "workspace" not in attrs and "document_node" in attrs:
             attrs["workspace"] = attrs["document_node"].workspace
+        return attrs
+
+
+class StripboardItemSerializer(serializers.ModelSerializer):
+    scene_details = WorkspaceNodeSerializer(source="scene", read_only=True)
+
+    class Meta:
+        model = StripboardItem
+        fields = [
+            "id",
+            "schedule",
+            "shooting_day",
+            "scene",
+            "scene_details",
+            "is_banner",
+            "banner_title",
+            "order",
+        ]
+        read_only_fields = ["id"]
+
+
+class ShootingDaySerializer(serializers.ModelSerializer):
+    strips = StripboardItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ShootingDay
+        fields = [
+            "id",
+            "schedule",
+            "day_number",
+            "date",
+            "call_time",
+            "shooting_location",
+            "notes",
+            "order",
+            "strips",
+        ]
+        read_only_fields = ["id"]
+
+
+class ShootingScheduleSerializer(serializers.ModelSerializer):
+    workspace = serializers.PrimaryKeyRelatedField(
+        queryset=Workspace.objects.all(), required=False
+    )
+    days_count = serializers.IntegerField(source="days.count", read_only=True)
+
+    class Meta:
+        model = ShootingSchedule
+        fields = [
+            "id",
+            "workspace",
+            "screenplay",
+            "title",
+            "days_count",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def validate(self, attrs):
+        if "workspace" not in attrs and "screenplay" in attrs:
+            attrs["workspace"] = attrs["screenplay"].workspace
         return attrs
 

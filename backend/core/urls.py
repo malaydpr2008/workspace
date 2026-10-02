@@ -8,6 +8,9 @@ from core.views import (
     ShotBlockCoverageViewSet,
     BreakdownElementViewSet,
     DocumentSnapshotViewSet,
+    ShootingScheduleViewSet,
+    ShootingDayViewSet,
+    StripboardItemViewSet,
 )
 
 router = DefaultRouter()
@@ -19,6 +22,9 @@ router.register(r"shot-coverages", ShotBlockCoverageViewSet, basename="shotblock
 router.register(r"shot-coverage", ShotBlockCoverageViewSet, basename="shotcoverage")
 router.register(r"breakdown-elements", BreakdownElementViewSet, basename="breakdownelement")
 router.register(r"snapshots", DocumentSnapshotViewSet, basename="documentsnapshot")
+router.register(r"schedules", ShootingScheduleViewSet, basename="shootingschedule")
+router.register(r"shooting-days", ShootingDayViewSet, basename="shootingday")
+router.register(r"stripboard-items", StripboardItemViewSet, basename="stripboarditem")
 
 urlpatterns = [
     path("", include(router.urls)),

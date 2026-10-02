@@ -19,6 +19,7 @@ import {
   Upload,
   BarChart3,
   History,
+  Calendar,
 } from 'lucide-react';
 import { WorkspaceNode, Shot, RevisionColor } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -38,6 +39,7 @@ import { BreakdownTagPopover } from '@/components/breakdown/BreakdownTagPopover'
 import { BreakdownSheetView } from '@/components/breakdown/BreakdownSheetView';
 import { ShotListTableView } from '@/components/storyboard/ShotListTableView';
 import { ProductionAnalyticsView } from '@/components/analytics/ProductionAnalyticsView';
+import { StripboardView } from '@/components/schedule/StripboardView';
 import { RevisionDraftSelector } from '@/components/editors/RevisionDraftSelector';
 import { VersionHistoryModal } from '@/components/history/VersionHistoryModal';
 import { exportProductionBibleZip } from '@/lib/productionBible';
@@ -79,7 +81,9 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
   const [userSelectedSceneId, setUserSelectedSceneId] = useState<string | null>(null);
   const [isReelOpen, setIsReelOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics'>('editor');
+  const [viewMode, setViewMode] = useState<
+    'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics' | 'stripboard'
+  >('editor');
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -510,6 +514,17 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               <BarChart3 className="w-3.5 h-3.5" />
               <span>Analytics</span>
             </button>
+            <button
+              onClick={() => setViewMode('stripboard')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'stripboard'
+                  ? 'bg-cyan-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Stripboard</span>
+            </button>
           </div>
 
           {/* Actor Sides Generator Button */}
@@ -623,6 +638,11 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             setUserSelectedSceneId(sceneId);
             setViewMode('editor');
           }}
+        />
+      ) : viewMode === 'stripboard' ? (
+        <StripboardView
+          screenplayNode={node}
+          scenes={scenes}
         />
       ) : (
         <div className="flex-1 flex overflow-hidden">

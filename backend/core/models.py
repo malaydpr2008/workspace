@@ -156,3 +156,72 @@ class DocumentSnapshot(models.Model):
     def __str__(self):
         return f"{self.label} ({self.revision_color}) - {self.document_node_id}"
 
+
+class ShootingSchedule(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        Workspace, on_delete=models.CASCADE, related_name="schedules"
+    )
+    screenplay = models.ForeignKey(
+        WorkspaceNode, on_delete=models.CASCADE, related_name="schedules"
+    )
+    title = models.CharField(max_length=255, default="Principal Photography")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.title} ({self.screenplay.title})"
+
+
+class ShootingDay(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    schedule = models.ForeignKey(
+        ShootingSchedule, on_delete=models.CASCADE, related_name="days"
+    )
+    day_number = models.PositiveIntegerField()
+    date = models.DateField(null=True, blank=True)
+    call_time = models.CharField(max_length=30, default="07:00 AM")
+    shooting_location = models.CharField(max_length=255, blank=True)
+    notes = models.TextField(blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "day_number"]
+
+    def __str__(self):
+        return f"Day {self.day_number} - {self.schedule.title}"
+
+
+class StripboardItem(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    schedule = models.ForeignKey(
+        ShootingSchedule, on_delete=models.CASCADE, related_name="strips"
+    )
+    shooting_day = models.ForeignKey(
+        ShootingDay,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="strips",
+    )
+    scene = models.ForeignKey(
+        WorkspaceNode,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="strip_items",
+    )
+    is_banner = models.BooleanField(default=False)
+    banner_title = models.CharField(max_length=255, blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order"]
+
+    def __str__(self):
+        if self.is_banner:
+            return f"[BANNER] {self.banner_title}"
+        return f"Strip: {self.scene.title if self.scene else 'No Scene'} (Order {self.order})"
+

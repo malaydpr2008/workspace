@@ -1,5 +1,16 @@
 import { create } from 'zustand';
-import { Workspace, WorkspaceNode, Character, Shot, BreakdownElement, DocumentSnapshot, RevisionColor } from '@/types/workspace';
+import {
+  Workspace,
+  WorkspaceNode,
+  Character,
+  Shot,
+  BreakdownElement,
+  DocumentSnapshot,
+  RevisionColor,
+  ShootingSchedule,
+  ShootingDay,
+  StripboardItem,
+} from '@/types/workspace';
 import {
   fetchWorkspaces,
   fetchNodes,
@@ -22,6 +33,17 @@ import {
   fetchSnapshots,
   createSnapshot,
   restoreSnapshot,
+  fetchSchedules,
+  createSchedule,
+  fetchShootingDays,
+  createShootingDay,
+  updateShootingDay,
+  deleteShootingDay,
+  fetchStripboardItems,
+  createStripboardItem,
+  updateStripboardItem,
+  deleteStripboardItem,
+  reorderStripboardItems,
 } from '@/lib/api';
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -38,6 +60,10 @@ interface WorkspaceState {
   shotsByScene: Record<string, Shot[]>;
   breakdownElements: Record<string, BreakdownElement>;
   snapshots: DocumentSnapshot[];
+  schedules: ShootingSchedule[];
+  activeScheduleId: string | null;
+  shootingDays: ShootingDay[];
+  stripboardItems: StripboardItem[];
   isLoading: boolean;
   saveStatus: 'idle' | 'saving' | 'saved';
   error: string | null;
@@ -133,6 +159,17 @@ interface WorkspaceState {
     snapshotId: string,
     documentId: string
   ) => Promise<boolean>;
+  loadSchedules: (screenplayId: string) => Promise<ShootingSchedule[]>;
+  setActiveSchedule: (scheduleId: string | null) => Promise<void>;
+  createScheduleItem: (screenplayId: string, title: string) => Promise<ShootingSchedule | null>;
+  createShootingDayItem: (data: Partial<ShootingDay> & { schedule: string; day_number: number }) => Promise<ShootingDay | null>;
+  updateShootingDayItem: (id: string, data: Partial<ShootingDay>) => Promise<ShootingDay | null>;
+  deleteShootingDayItem: (id: string) => Promise<void>;
+  createStripItem: (data: Partial<StripboardItem> & { schedule: string }) => Promise<StripboardItem | null>;
+  updateStripItem: (id: string, data: Partial<StripboardItem>) => Promise<StripboardItem | null>;
+  deleteStripItem: (id: string) => Promise<void>;
+  reorderStrips: (items: { id: string; order: number; shooting_day?: string | null }[]) => Promise<void>;
+  populateStripsFromScenes: (scheduleId: string, sceneIds: string[]) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -146,6 +183,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   shotsByScene: {},
   breakdownElements: {},
   snapshots: [],
+  schedules: [],
+  activeScheduleId: null,
+  shootingDays: [],
+  stripboardItems: [],
   isLoading: false,
   saveStatus: 'idle',
   error: null,
@@ -940,6 +981,188 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch (err) {
       console.error('Failed to restore snapshot', err);
       return false;
+    }
+  },
+
+  loadSchedules: async (screenplayId: string) => {
+    try {
+      const list = await fetchSchedules(screenplayId);
+      set({ schedules: list });
+      if (list.length > 0 && !get().activeScheduleId) {
+        await get().setActiveSchedule(list[0].id);
+      }
+      return list;
+    } catch (err) {
+      console.error('Failed to load schedules', err);
+      return [];
+    }
+  },
+
+  setActiveSchedule: async (scheduleId: string | null) => {
+    set({ activeScheduleId: scheduleId });
+    if (!scheduleId) {
+      set({ shootingDays: [], stripboardItems: [] });
+      return;
+    }
+    try {
+      const [days, strips] = await Promise.all([
+        fetchShootingDays(scheduleId),
+        fetchStripboardItems(scheduleId),
+      ]);
+      set({
+        shootingDays: days.sort((a, b) => a.order - b.order || a.day_number - b.day_number),
+        stripboardItems: strips.sort((a, b) => a.order - b.order),
+      });
+    } catch (err) {
+      console.error('Failed to load schedule details', err);
+    }
+  },
+
+  createScheduleItem: async (screenplayId: string, title: string) => {
+    try {
+      const created = await createSchedule({
+        screenplay: screenplayId,
+        title,
+      });
+      set((state) => ({ schedules: [created, ...state.schedules] }));
+      await get().setActiveSchedule(created.id);
+      return created;
+    } catch (err) {
+      console.error('Failed to create schedule', err);
+      return null;
+    }
+  },
+
+  createShootingDayItem: async (data) => {
+    try {
+      const created = await createShootingDay(data);
+      set((state) => ({
+        shootingDays: [...state.shootingDays, created].sort(
+          (a, b) => a.order - b.order || a.day_number - b.day_number
+        ),
+      }));
+      return created;
+    } catch (err) {
+      console.error('Failed to create shooting day', err);
+      return null;
+    }
+  },
+
+  updateShootingDayItem: async (id, data) => {
+    try {
+      const updated = await updateShootingDay(id, data);
+      set((state) => ({
+        shootingDays: state.shootingDays.map((d) => (d.id === id ? updated : d)),
+      }));
+      return updated;
+    } catch (err) {
+      console.error('Failed to update shooting day', err);
+      return null;
+    }
+  },
+
+  deleteShootingDayItem: async (id) => {
+    try {
+      await deleteShootingDay(id);
+      set((state) => ({
+        shootingDays: state.shootingDays.filter((d) => d.id !== id),
+        stripboardItems: state.stripboardItems.map((s) =>
+          s.shooting_day === id ? { ...s, shooting_day: null } : s
+        ),
+      }));
+    } catch (err) {
+      console.error('Failed to delete shooting day', err);
+    }
+  },
+
+  createStripItem: async (data) => {
+    try {
+      const created = await createStripboardItem(data);
+      set((state) => ({
+        stripboardItems: [...state.stripboardItems, created].sort((a, b) => a.order - b.order),
+      }));
+      return created;
+    } catch (err) {
+      console.error('Failed to create strip item', err);
+      return null;
+    }
+  },
+
+  updateStripItem: async (id, data) => {
+    try {
+      const updated = await updateStripboardItem(id, data);
+      set((state) => ({
+        stripboardItems: state.stripboardItems.map((s) => (s.id === id ? updated : s)),
+      }));
+      return updated;
+    } catch (err) {
+      console.error('Failed to update strip item', err);
+      return null;
+    }
+  },
+
+  deleteStripItem: async (id) => {
+    try {
+      await deleteStripboardItem(id);
+      set((state) => ({
+        stripboardItems: state.stripboardItems.filter((s) => s.id !== id),
+      }));
+    } catch (err) {
+      console.error('Failed to delete strip item', err);
+    }
+  },
+
+  reorderStrips: async (items) => {
+    const itemMap = new Map(items.map((i) => [i.id, i]));
+    set((state) => ({
+      stripboardItems: state.stripboardItems
+        .map((s) => {
+          const patch = itemMap.get(s.id);
+          if (patch) {
+            return {
+              ...s,
+              order: patch.order,
+              shooting_day:
+                patch.shooting_day !== undefined ? patch.shooting_day : s.shooting_day,
+            };
+          }
+          return s;
+        })
+        .sort((a, b) => a.order - b.order),
+    }));
+
+    try {
+      await reorderStripboardItems(items);
+    } catch (err) {
+      console.error('Failed to persist strip reordering', err);
+    }
+  },
+
+  populateStripsFromScenes: async (scheduleId: string, sceneIds: string[]) => {
+    try {
+      const currentStrips = get().stripboardItems;
+      const existingSceneIds = new Set(
+        currentStrips.map((s) => s.scene).filter(Boolean)
+      );
+
+      let currentOrder = currentStrips.length;
+      const toCreate = sceneIds.filter((id) => !existingSceneIds.has(id));
+
+      for (const sceneId of toCreate) {
+        currentOrder++;
+        await createStripboardItem({
+          schedule: scheduleId,
+          scene: sceneId,
+          shooting_day: null,
+          is_banner: false,
+          order: currentOrder,
+        });
+      }
+
+      const refreshed = await fetchStripboardItems(scheduleId);
+      set({ stripboardItems: refreshed.sort((a, b) => a.order - b.order) });
+    } catch (err) {
+      console.error('Failed to populate strips from scenes', err);
     }
   },
 }));

@@ -9,6 +9,9 @@ from core.models import (
     ShotBlockCoverage,
     BreakdownElement,
     DocumentSnapshot,
+    ShootingSchedule,
+    ShootingDay,
+    StripboardItem,
 )
 
 
@@ -310,4 +313,113 @@ class DocumentSnapshotAPITests(APITestCase):
         self.assertEqual(
             WorkspaceNode.objects.filter(parent=self.script).count(), 1
         )
+
+
+class ShootingScheduleAPITests(APITestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Film Lot", slug="film-lot")
+        self.screenplay = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            type="screenplay",
+            title="Chronos Feature",
+            rank="0|h0:",
+        )
+        self.scene1 = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.screenplay,
+            type="scene",
+            title="INT. LAB - DAY",
+            rank="0|h1:",
+        )
+        self.scene2 = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.screenplay,
+            type="scene",
+            title="EXT. ALLEY - NIGHT",
+            rank="0|h2:",
+        )
+
+    def test_schedule_and_day_creation(self):
+        # Create Schedule
+        sched_url = reverse("shootingschedule-list")
+        sched_resp = self.client.post(
+            sched_url,
+            {
+                "screenplay": str(self.screenplay.id),
+                "title": "Principal Photography - Draft 1",
+            },
+            format="json",
+        )
+        self.assertEqual(sched_resp.status_code, status.HTTP_201_CREATED)
+        sched_id = sched_resp.data["id"]
+        self.assertEqual(sched_resp.data["title"], "Principal Photography - Draft 1")
+
+        # Create Shooting Day
+        day_url = reverse("shootingday-list")
+        day_resp = self.client.post(
+            day_url,
+            {
+                "schedule": sched_id,
+                "day_number": 1,
+                "call_time": "06:30 AM",
+                "shooting_location": "Stage 4, Main Lot",
+                "order": 1,
+            },
+            format="json",
+        )
+        self.assertEqual(day_resp.status_code, status.HTTP_201_CREATED)
+        day_id = day_resp.data["id"]
+        self.assertEqual(day_resp.data["day_number"], 1)
+
+        # Create Stripboard items
+        strip_url = reverse("stripboarditem-list")
+        strip1_resp = self.client.post(
+            strip_url,
+            {
+                "schedule": sched_id,
+                "shooting_day": day_id,
+                "scene": str(self.scene1.id),
+                "order": 1,
+            },
+            format="json",
+        )
+        self.assertEqual(strip1_resp.status_code, status.HTTP_201_CREATED)
+        strip1_id = strip1_resp.data["id"]
+
+        banner_resp = self.client.post(
+            strip_url,
+            {
+                "schedule": sched_id,
+                "shooting_day": day_id,
+                "is_banner": True,
+                "banner_title": "LUNCH BREAK",
+                "order": 2,
+            },
+            format="json",
+        )
+        self.assertEqual(banner_resp.status_code, status.HTTP_201_CREATED)
+        banner_id = banner_resp.data["id"]
+        self.assertTrue(banner_resp.data["is_banner"])
+
+        # Test batch reorder
+        reorder_url = reverse("stripboarditem-reorder")
+        reorder_resp = self.client.post(
+            reorder_url,
+            [
+                {"id": strip1_id, "order": 2},
+                {"id": banner_id, "order": 1},
+            ],
+            format="json",
+        )
+        self.assertEqual(reorder_resp.status_code, status.HTTP_200_OK)
+
+        strip1 = StripboardItem.objects.get(id=strip1_id)
+        banner = StripboardItem.objects.get(id=banner_id)
+        self.assertEqual(strip1.order, 2)
+        self.assertEqual(banner.order, 1)
+
+        # Filter strips by schedule
+        filter_resp = self.client.get(f"{strip_url}?schedule={sched_id}")
+        self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(filter_resp.data), 2)
 

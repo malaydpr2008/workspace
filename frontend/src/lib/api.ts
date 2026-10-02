@@ -1,4 +1,14 @@
-import { Workspace, WorkspaceNode, Character, Shot, BreakdownElement, DocumentSnapshot } from '@/types/workspace';
+import {
+  Workspace,
+  WorkspaceNode,
+  Character,
+  Shot,
+  BreakdownElement,
+  DocumentSnapshot,
+  ShootingSchedule,
+  ShootingDay,
+  StripboardItem,
+} from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
@@ -273,6 +283,156 @@ export async function restoreSnapshot(
     headers: { 'Content-Type': 'application/json' },
   });
   return handleResponse<{ status: string; message: string; nodes_restored: number }>(res);
+}
+
+// -------------------------------------------------------------
+// Shooting Schedules, Shooting Days & Stripboard Items API
+// -------------------------------------------------------------
+
+export async function fetchSchedules(
+  screenplayId?: string,
+  workspaceId?: string
+): Promise<ShootingSchedule[]> {
+  const url = new URL(`${API_BASE_URL}/schedules/`);
+  if (screenplayId) url.searchParams.set('screenplay', screenplayId);
+  if (workspaceId) url.searchParams.set('workspace', workspaceId);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<ShootingSchedule[]>(res);
+}
+
+export async function createSchedule(data: {
+  screenplay: string;
+  title: string;
+  workspace?: string;
+}): Promise<ShootingSchedule> {
+  const res = await fetch(`${API_BASE_URL}/schedules/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ShootingSchedule>(res);
+}
+
+export async function updateSchedule(
+  id: string,
+  data: Partial<ShootingSchedule>
+): Promise<ShootingSchedule> {
+  const res = await fetch(`${API_BASE_URL}/schedules/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ShootingSchedule>(res);
+}
+
+export async function deleteSchedule(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/schedules/${id}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete schedule failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function fetchShootingDays(scheduleId: string): Promise<ShootingDay[]> {
+  const url = new URL(`${API_BASE_URL}/shooting-days/`);
+  url.searchParams.set('schedule', scheduleId);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<ShootingDay[]>(res);
+}
+
+export async function createShootingDay(
+  data: Partial<ShootingDay> & { schedule: string; day_number: number }
+): Promise<ShootingDay> {
+  const res = await fetch(`${API_BASE_URL}/shooting-days/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ShootingDay>(res);
+}
+
+export async function updateShootingDay(
+  id: string,
+  data: Partial<ShootingDay>
+): Promise<ShootingDay> {
+  const res = await fetch(`${API_BASE_URL}/shooting-days/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ShootingDay>(res);
+}
+
+export async function deleteShootingDay(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/shooting-days/${id}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete shooting day failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function fetchStripboardItems(
+  scheduleId: string,
+  shootingDayId?: string | null
+): Promise<StripboardItem[]> {
+  const url = new URL(`${API_BASE_URL}/stripboard-items/`);
+  url.searchParams.set('schedule', scheduleId);
+  if (shootingDayId !== undefined) {
+    url.searchParams.set('shooting_day', shootingDayId === null ? 'null' : shootingDayId);
+  }
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<StripboardItem[]>(res);
+}
+
+export async function createStripboardItem(
+  data: Partial<StripboardItem> & { schedule: string }
+): Promise<StripboardItem> {
+  const res = await fetch(`${API_BASE_URL}/stripboard-items/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<StripboardItem>(res);
+}
+
+export async function updateStripboardItem(
+  id: string,
+  data: Partial<StripboardItem>
+): Promise<StripboardItem> {
+  const res = await fetch(`${API_BASE_URL}/stripboard-items/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<StripboardItem>(res);
+}
+
+export async function deleteStripboardItem(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/stripboard-items/${id}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete stripboard item failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function reorderStripboardItems(
+  items: { id: string; order: number; shooting_day?: string | null }[]
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/stripboard-items/reorder/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(items),
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Reorder stripboard items failed [${res.status}]: ${errorBody}`);
+  }
 }
 
 

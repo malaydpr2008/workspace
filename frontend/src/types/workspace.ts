@@ -99,3 +99,35 @@ export interface DocumentSnapshot {
   created_at: string;
 }
 
+export interface ShootingSchedule {
+  id: string;
+  workspace: string;
+  screenplay: string;
+  title: string;
+  days_count?: number;
+  created_at: string;
+}
+
+export interface StripboardItem {
+  id: string;
+  schedule: string;
+  shooting_day: string | null;
+  scene: string | null;
+  scene_details?: WorkspaceNode;
+  is_banner: boolean;
+  banner_title: string;
+  order: number;
+}
+
+export interface ShootingDay {
+  id: string;
+  schedule: string;
+  day_number: number;
+  date?: string | null;
+  call_time: string;
+  shooting_location: string;
+  notes: string;
+  order: number;
+  strips?: StripboardItem[];
+}
+

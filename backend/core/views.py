@@ -12,6 +12,9 @@ from core.models import (
     ShotBlockCoverage,
     BreakdownElement,
     DocumentSnapshot,
+    ShootingSchedule,
+    ShootingDay,
+    StripboardItem,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -21,6 +24,9 @@ from core.serializers import (
     ShotBlockCoverageSerializer,
     BreakdownElementSerializer,
     DocumentSnapshotSerializer,
+    ShootingScheduleSerializer,
+    ShootingDaySerializer,
+    StripboardItemSerializer,
 )
 
 
@@ -243,5 +249,80 @@ class DocumentSnapshotViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ShootingScheduleViewSet(viewsets.ModelViewSet):
+    queryset = ShootingSchedule.objects.all()
+    serializer_class = ShootingScheduleSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        screenplay_id = self.request.query_params.get("screenplay")
+        if screenplay_id:
+            queryset = queryset.filter(screenplay_id=screenplay_id)
+        workspace_id = self.request.query_params.get("workspace")
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+        return queryset
+
+
+class ShootingDayViewSet(viewsets.ModelViewSet):
+    queryset = ShootingDay.objects.all()
+    serializer_class = ShootingDaySerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        schedule_id = self.request.query_params.get("schedule")
+        if schedule_id:
+            queryset = queryset.filter(schedule_id=schedule_id)
+        return queryset
+
+
+class StripboardItemViewSet(viewsets.ModelViewSet):
+    queryset = StripboardItem.objects.all()
+    serializer_class = StripboardItemSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        schedule_id = self.request.query_params.get("schedule")
+        if schedule_id:
+            queryset = queryset.filter(schedule_id=schedule_id)
+
+        shooting_day_id = self.request.query_params.get("shooting_day")
+        if shooting_day_id:
+            if shooting_day_id.lower() in ("null", "none", "unscheduled"):
+                queryset = queryset.filter(shooting_day__isnull=True)
+            else:
+                queryset = queryset.filter(shooting_day_id=shooting_day_id)
+
+        return queryset
+
+    @action(detail=False, methods=["post"])
+    def reorder(self, request):
+        """
+        Batch update order and shooting_day for strips.
+        Payload: [ { id: <uuid>, order: <int>, shooting_day: <uuid|null> }, ... ]
+        """
+        items = request.data
+        if not isinstance(items, list):
+            return Response(
+                {"error": "Expected a list of strip items with id, order, and optional shooting_day"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            for item in items:
+                strip_id = item.get("id")
+                if not strip_id:
+                    continue
+                update_fields = {}
+                if "order" in item:
+                    update_fields["order"] = item["order"]
+                if "shooting_day" in item:
+                    update_fields["shooting_day_id"] = item["shooting_day"]
+                if update_fields:
+                    StripboardItem.objects.filter(id=strip_id).update(**update_fields)
+
+        return Response({"status": "reordered"}, status=status.HTTP_200_OK)
 
 
