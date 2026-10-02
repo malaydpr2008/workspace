@@ -19,6 +19,18 @@ class Workspace(models.Model):
 
 
 class WorkspaceNode(models.Model):
+    REVISION_COLOR_CHOICES = [
+        ("WHITE", "White"),
+        ("BLUE", "Blue"),
+        ("PINK", "Pink"),
+        ("YELLOW", "Yellow"),
+        ("GREEN", "Green"),
+        ("GOLDENROD", "Goldenrod"),
+        ("BUFF", "Buff"),
+        ("SALMON", "Salmon"),
+        ("CHERRY", "Cherry"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="nodes")
     parent = models.ForeignKey(
@@ -29,6 +41,11 @@ class WorkspaceNode(models.Model):
     title = models.CharField(max_length=255, blank=True)
     content = models.TextField(blank=True)
     properties = models.JSONBField(default=dict, blank=True)
+    revision_color = models.CharField(
+        max_length=32, choices=REVISION_COLOR_CHOICES, default="WHITE"
+    )
+    is_locked = models.BooleanField(default=False)
+    revision_asterisk = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

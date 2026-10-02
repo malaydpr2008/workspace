@@ -17,6 +17,17 @@ export interface Workspace {
   created_at: string;
 }
 
+export type RevisionColor =
+  | 'WHITE'
+  | 'BLUE'
+  | 'PINK'
+  | 'YELLOW'
+  | 'GREEN'
+  | 'GOLDENROD'
+  | 'BUFF'
+  | 'SALMON'
+  | 'CHERRY';
+
 export interface WorkspaceNode {
   id: string;
   workspace: string;
@@ -27,6 +38,9 @@ export interface WorkspaceNode {
   content: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   properties: Record<string, any>;
+  revision_color?: RevisionColor;
+  is_locked?: boolean;
+  revision_asterisk?: boolean;
   created_at: string;
   updated_at: string;
 }

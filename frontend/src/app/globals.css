@@ -266,6 +266,20 @@ body {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
+
+  /* Revision Change Asterisks in Print */
+  .screenplay-revision-asterisk {
+    position: absolute !important;
+    right: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-family: 'Courier Prime', Courier, monospace !important;
+    font-size: 14pt !important;
+    font-weight: bold !important;
+    color: #000000 !important;
+    display: block !important;
+  }
 }
+
 
 

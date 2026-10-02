@@ -59,12 +59,20 @@ interface WorkspaceState {
     title: string,
     parentId?: string | null
   ) => Promise<WorkspaceNode | null>;
-  updateNodeContent: (nodeId: string, content: string) => void;
+  updateNodeContent: (
+    nodeId: string,
+    content: string,
+    extraFields?: Partial<WorkspaceNode>
+  ) => void;
   updateNodeTitle: (nodeId: string, title: string) => void;
   updateNodeProperties: (
     nodeId: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     properties: Record<string, any>
+  ) => Promise<void>;
+  updateNodeFields: (
+    nodeId: string,
+    fields: Partial<WorkspaceNode>
   ) => Promise<void>;
   changeBlockType: (
     nodeId: string,
@@ -78,7 +86,8 @@ interface WorkspaceState {
     afterNodeId?: string | null,
     initialContent?: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    properties?: Record<string, any>
+    properties?: Record<string, any>,
+    extraFields?: Partial<WorkspaceNode>
   ) => Promise<WorkspaceNode | null>;
   deleteNode: (nodeId: string) => Promise<void>;
   createSceneShot: (
@@ -357,17 +366,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
-  updateNodeContent: (nodeId: string, content: string) => {
+  updateNodeContent: (
+    nodeId: string,
+    content: string,
+    extraFields?: Partial<WorkspaceNode>
+  ) => {
     const { nodes } = get();
     const existing = nodes[nodeId];
     if (!existing) return;
-    const previousContent = existing.content;
+    const previous = { ...existing };
 
     // Optimistically update
     set({
       nodes: {
         ...nodes,
-        [nodeId]: { ...existing, content },
+        [nodeId]: { ...existing, content, ...(extraFields || {}) },
       },
       saveStatus: 'saving',
     });
@@ -378,7 +391,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     debounceTimers[nodeId] = setTimeout(async () => {
       try {
-        await updateNode(nodeId, { content });
+        await updateNode(nodeId, { content, ...(extraFields || {}) });
         set({ saveStatus: 'saved' });
 
         if (saveStatusTimer) clearTimeout(saveStatusTimer);
@@ -392,7 +405,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           set({
             nodes: {
               ...get().nodes,
-              [nodeId]: { ...current, content: previousContent },
+              [nodeId]: previous,
             },
             saveStatus: 'idle',
             lastError: `Network sync error: content update rolled back.`,
@@ -469,6 +482,36 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
+  updateNodeFields: async (nodeId, fields) => {
+    const { nodes } = get();
+    const existing = nodes[nodeId];
+    if (!existing) return;
+
+    const updated = { ...existing, ...fields };
+    set({
+      nodes: {
+        ...nodes,
+        [nodeId]: updated,
+      },
+      saveStatus: 'saving',
+    });
+
+    try {
+      await updateNode(nodeId, fields);
+      set({ saveStatus: 'saved' });
+      setTimeout(() => set({ saveStatus: 'idle' }), 1200);
+    } catch (err) {
+      console.error('Failed to update node fields', nodeId, err);
+      set({
+        nodes: {
+          ...get().nodes,
+          [nodeId]: existing,
+        },
+        saveStatus: 'idle',
+      });
+    }
+  },
+
   changeBlockType: async (nodeId, newType, properties = {}) => {
     const { nodes } = get();
     const existing = nodes[nodeId];
@@ -497,7 +540,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     type,
     afterNodeId = null,
     initialContent = '',
-    properties = {}
+    properties = {},
+    extraFields = {}
   ) => {
     const { currentWorkspace, childrenMap, nodes } = get();
     if (!currentWorkspace) return null;
@@ -524,10 +568,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         workspace: currentWorkspace.id,
         parent: parentId,
         type,
-        title: '',
+        title: extraFields?.title ?? '',
         content: initialContent,
         rank,
         properties,
+        ...extraFields,
       });
 
       const nextChildIds = [...childIds];

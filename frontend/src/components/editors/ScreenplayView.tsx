@@ -19,7 +19,7 @@ import {
   Upload,
   BarChart3,
 } from 'lucide-react';
-import { WorkspaceNode, Shot } from '@/types/workspace';
+import { WorkspaceNode, Shot, RevisionColor } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import {
   compileScreenplayToFountain,
@@ -37,6 +37,12 @@ import { BreakdownTagPopover } from '@/components/breakdown/BreakdownTagPopover'
 import { BreakdownSheetView } from '@/components/breakdown/BreakdownSheetView';
 import { ShotListTableView } from '@/components/storyboard/ShotListTableView';
 import { ProductionAnalyticsView } from '@/components/analytics/ProductionAnalyticsView';
+import { RevisionDraftSelector } from '@/components/editors/RevisionDraftSelector';
+import {
+  getRevisionConfig,
+  getSceneNumber,
+  calculateLockedSceneNumber,
+} from '@/lib/revision';
 
 interface ScreenplayViewProps {
   node: WorkspaceNode;
@@ -55,6 +61,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     updateNodeContent,
     updateNodeTitle,
     updateNodeProperties,
+    updateNodeFields,
     changeBlockType,
     insertBlock,
     deleteNode,
@@ -131,6 +138,75 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
 
   const shots: Shot[] = activeSceneId ? shotsByScene[activeSceneId] || [] : [];
   const activeShot = shots.find((s) => s.id === activeShotId) || shots[0] || null;
+
+  // Hollywood Revision and Lock state
+  const activeRevisionColor = (node.revision_color || node.properties?.revision_color || 'WHITE') as RevisionColor;
+  const isScreenplayLocked = Boolean(node.is_locked || node.properties?.is_locked);
+  const revisionConfig = getRevisionConfig(activeRevisionColor);
+
+  const handleSelectRevisionColor = async (color: RevisionColor) => {
+    await updateNodeFields(node.id, {
+      revision_color: color,
+      properties: { ...node.properties, revision_color: color },
+    });
+  };
+
+  const handleToggleLock = async () => {
+    const nextLocked = !isScreenplayLocked;
+    await updateNodeFields(node.id, {
+      is_locked: nextLocked,
+      properties: { ...node.properties, is_locked: nextLocked },
+    });
+  };
+
+  const handleAddScene = async (afterSceneId?: string) => {
+    const insertAfterIndex = afterSceneId
+      ? scenes.findIndex((s) => s.id === afterSceneId)
+      : scenes.length - 1;
+
+    let sceneNumber: string;
+    let title: string;
+
+    if (isScreenplayLocked) {
+      sceneNumber = calculateLockedSceneNumber(scenes, insertAfterIndex);
+      title = `SCENE ${sceneNumber} - INT. NEW LOCATION - DAY`;
+    } else {
+      sceneNumber = String(scenes.length + 1);
+      title = `SCENE ${sceneNumber} - INT. LOCATION - DAY`;
+    }
+
+    const parentId = isScene ? node.parent || node.id : node.id;
+    const afterNodeId = afterSceneId || (scenes.length > 0 ? scenes[scenes.length - 1].id : null);
+
+    const created = await insertBlock(
+      parentId,
+      'scene',
+      afterNodeId,
+      '',
+      { scene_number: sceneNumber },
+      {
+        title,
+        revision_color: activeRevisionColor,
+        is_locked: isScreenplayLocked,
+        revision_asterisk: activeRevisionColor !== 'WHITE',
+      }
+    );
+
+    if (created) {
+      setUserSelectedSceneId(created.id);
+      await insertBlock(
+        created.id,
+        'action',
+        null,
+        'Describe scene action and atmosphere...',
+        {},
+        {
+          revision_color: activeRevisionColor,
+          revision_asterisk: activeRevisionColor !== 'WHITE',
+        }
+      );
+    }
+  };
 
   // Set of block IDs covered by the active shot
   const coveredBlockIds = useMemo(() => {
@@ -318,6 +394,14 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
 
         {/* Right Header Status, Export & Scene Selector */}
         <div className="flex items-center space-x-3">
+          {/* Hollywood Revision Draft Selector & Scene Lock */}
+          <RevisionDraftSelector
+            activeColor={activeRevisionColor}
+            onSelectColor={handleSelectRevisionColor}
+            isLocked={isScreenplayLocked}
+            onToggleLock={handleToggleLock}
+          />
+
           {/* Live Auto-save indicator */}
           <div className="flex items-center space-x-1.5 text-xs font-mono mr-1">
             {saveStatus === 'saving' && (
@@ -427,23 +511,32 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           />
 
           {/* Scene Selector Pill Switcher */}
-          {scenes.length > 1 && (
-            <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-              {scenes.map((sc, idx) => (
+          <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+            {scenes.map((sc, idx) => {
+              const scNum = getSceneNumber(sc, idx);
+              return (
                 <button
                   key={sc.id}
                   onClick={() => setUserSelectedSceneId(sc.id)}
                   className={`px-3 py-1 rounded text-xs font-mono transition-all ${
                     activeSceneId === sc.id
-                      ? 'bg-cyan-600 text-white shadow-sm'
+                      ? 'bg-cyan-600 text-white shadow-sm font-semibold'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Scene {idx + 1}
+                  Scene {scNum}
                 </button>
-              ))}
-            </div>
-          )}
+              );
+            })}
+            <button
+              onClick={() => handleAddScene()}
+              className="px-2 py-1 rounded text-xs font-mono text-cyan-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center space-x-1"
+              title={isScreenplayLocked ? 'Add scene with locked alphanumeric numbering (e.g. 1A)' : 'Add new scene'}
+            >
+              <Plus className="w-3 h-3" />
+              <span>Add</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -514,6 +607,9 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                 <div className="screenplay-scene-heading group flex items-center justify-between p-3 rounded-lg bg-slate-900/80 border border-slate-800 focus-within:border-cyan-500/60 transition-all">
                   <div className="flex items-center space-x-2 flex-1 mr-3">
                     <Film className="w-4 h-4 text-rose-400 shrink-0 no-print" />
+                    <span className="no-print text-xs font-mono font-bold px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shrink-0">
+                      SCENE {getSceneNumber(currentScene, scenes.findIndex((s) => s.id === currentScene.id))}
+                    </span>
                     <input
                       type="text"
                       value={currentScene.title}
@@ -524,6 +620,14 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                     />
                   </div>
                   <div className="no-print flex items-center space-x-2 text-[11px] font-mono text-slate-500">
+                    <button
+                      onClick={() => handleAddScene(currentScene.id)}
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-600 hover:text-white text-slate-300 transition-colors flex items-center space-x-1"
+                      title={isScreenplayLocked ? 'Insert locked scene after this scene (e.g. 1A)' : 'Insert new scene after this scene'}
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Scene</span>
+                    </button>
                     <span>[Enter: +Action]</span>
                     <button
                       onClick={() => insertBlock(currentScene.id, 'action', null, '')}
@@ -568,6 +672,13 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                     const blockBreakdownElements = getBlockBreakdownElements(block.id);
 
                     if (block.type === 'action') {
+                      const isRevised = Boolean(
+                        block.revision_asterisk ||
+                        (activeRevisionColor !== 'WHITE' &&
+                          (block.revision_color === activeRevisionColor ||
+                            block.properties?.revision_color === activeRevisionColor))
+                      );
+
                       return (
                         <div
                           key={block.id}
@@ -577,7 +688,39 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                               : 'text-slate-300 bg-slate-900/20 border border-transparent hover:border-slate-800 hover:bg-slate-900/40'
                           }`}
                         >
-                          <div className="no-print flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-sans">
+                          {/* Right Margin Revision Asterisk */}
+                          <div
+                            onClick={() => {
+                              updateNodeFields(block.id, {
+                                revision_asterisk: !isRevised,
+                                revision_color: activeRevisionColor,
+                              });
+                            }}
+                            className="absolute right-3 top-3.5 select-none cursor-pointer flex items-center justify-center z-10"
+                            title={
+                              isRevised
+                                ? `Revised in ${revisionConfig.draftName} (Click to toggle)`
+                                : `Mark revision in ${revisionConfig.label} draft`
+                            }
+                          >
+                            {isRevised ? (
+                              <span
+                                className="font-mono text-base font-bold leading-none px-1 rounded hover:scale-125 transition-transform"
+                                style={{ color: revisionConfig.hex }}
+                              >
+                                *
+                              </span>
+                            ) : (
+                              <span className="no-print font-mono text-[10px] opacity-0 group-hover:opacity-30 text-slate-500 hover:text-slate-200">
+                                *
+                              </span>
+                            )}
+                            {isRevised && (
+                              <span className="screenplay-revision-asterisk hidden print:block">*</span>
+                            )}
+                          </div>
+
+                          <div className="no-print flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-sans pr-6">
                             <div className="flex items-center space-x-2">
                               <span>Action Block</span>
                               <span className="text-slate-600">•</span>
@@ -647,7 +790,12 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                               blockInputRefs.current[block.id] = el;
                             }}
                             value={block.content}
-                            onChange={(e) => updateNodeContent(block.id, e.target.value)}
+                            onChange={(e) => {
+                              const extra = activeRevisionColor !== 'WHITE'
+                                ? { revision_asterisk: true, revision_color: activeRevisionColor }
+                                : {};
+                              updateNodeContent(block.id, e.target.value, extra);
+                            }}
                             onKeyDown={(e) => handleActionKeyDown(e, block, idx)}
                             placeholder="Describe action, movement, or setting..."
                             rows={Math.max(2, block.content.split('\n').length)}
@@ -670,6 +818,13 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                     }
 
                     if (block.type === 'dialogue') {
+                      const isRevised = Boolean(
+                        block.revision_asterisk ||
+                        (activeRevisionColor !== 'WHITE' &&
+                          (block.revision_color === activeRevisionColor ||
+                            block.properties?.revision_color === activeRevisionColor))
+                      );
+
                       return (
                         <div
                           key={block.id}
@@ -679,8 +834,40 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                               : 'bg-slate-900/20 border border-transparent hover:border-slate-800 hover:bg-slate-900/40'
                           }`}
                         >
+                          {/* Right Margin Revision Asterisk */}
+                          <div
+                            onClick={() => {
+                              updateNodeFields(block.id, {
+                                revision_asterisk: !isRevised,
+                                revision_color: activeRevisionColor,
+                              });
+                            }}
+                            className="absolute right-3 top-3.5 select-none cursor-pointer flex items-center justify-center z-10"
+                            title={
+                              isRevised
+                                ? `Revised in ${revisionConfig.draftName} (Click to toggle)`
+                                : `Mark revision in ${revisionConfig.label} draft`
+                            }
+                          >
+                            {isRevised ? (
+                              <span
+                                className="font-mono text-base font-bold leading-none px-1 rounded hover:scale-125 transition-transform"
+                                style={{ color: revisionConfig.hex }}
+                              >
+                                *
+                              </span>
+                            ) : (
+                              <span className="no-print font-mono text-[10px] opacity-0 group-hover:opacity-30 text-slate-500 hover:text-slate-200">
+                                *
+                              </span>
+                            )}
+                            {isRevised && (
+                              <span className="screenplay-revision-asterisk hidden print:block">*</span>
+                            )}
+                          </div>
+
                           {/* Block Header & Action Controls */}
-                          <div className="no-print flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-sans">
+                          <div className="no-print flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-sans pr-6">
                             <div className="flex items-center space-x-2">
                               <span>Dialogue Block</span>
                               <span className="text-slate-600">•</span>
@@ -805,7 +992,12 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                                 blockInputRefs.current[block.id] = el;
                               }}
                               value={block.content}
-                              onChange={(e) => updateNodeContent(block.id, e.target.value)}
+                              onChange={(e) => {
+                                const extra = activeRevisionColor !== 'WHITE'
+                                  ? { revision_asterisk: true, revision_color: activeRevisionColor }
+                                  : {};
+                                updateNodeContent(block.id, e.target.value, extra);
+                              }}
                               onKeyDown={(e) => handleDialogueKeyDown(e, block, idx)}
                               placeholder="Spoken dialogue line..."
                               rows={Math.max(2, block.content.split('\n').length)}
