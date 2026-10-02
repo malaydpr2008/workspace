@@ -14,6 +14,12 @@ import {
 } from 'lucide-react';
 import { WorkspaceNode } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  compileArticleToMarkdown,
+  downloadFile,
+  copyToClipboard,
+} from '@/lib/compiler';
+import { DocumentExportButton } from '@/components/export/DocumentExportButton';
 
 interface ArticleViewProps {
   node: WorkspaceNode;
@@ -52,6 +58,24 @@ export const ArticleView: React.FC<ArticleViewProps> = ({ node }) => {
     );
   };
 
+  // Export handlers
+  const handleExportMarkdown = () => {
+    const md = compileArticleToMarkdown(node, nodes, childrenMap);
+    const slug = (node.title || 'article').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    downloadFile(md, `${slug}.md`, 'text/markdown;charset=utf-8');
+  };
+
+  const handleExportText = () => {
+    const md = compileArticleToMarkdown(node, nodes, childrenMap);
+    const slug = (node.title || 'article').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    downloadFile(md, `${slug}.txt`, 'text/plain;charset=utf-8');
+  };
+
+  const handleCopyClipboard = async () => {
+    const md = compileArticleToMarkdown(node, nodes, childrenMap);
+    return await copyToClipboard(md);
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-y-auto">
       {/* Top Bar */}
@@ -72,7 +96,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({ node }) => {
           </div>
         </div>
 
-        {/* Live Auto-save indicator & Stats */}
+        {/* Live Auto-save indicator, Stats & Export */}
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-1.5 text-xs font-mono">
             {saveStatus === 'saving' && (
@@ -96,6 +120,15 @@ export const ArticleView: React.FC<ArticleViewProps> = ({ node }) => {
             <Clock className="w-3.5 h-3.5 text-amber-400" />
             <span>{readingTime} min read</span>
           </span>
+
+          {/* Document Compilation Export Dropdown */}
+          <DocumentExportButton
+            onExportPrimary={handleExportMarkdown}
+            primaryLabel="Export as Markdown"
+            primaryExtension=".md"
+            onExportPlainText={handleExportText}
+            onCopyClipboard={handleCopyClipboard}
+          />
         </div>
       </div>
 

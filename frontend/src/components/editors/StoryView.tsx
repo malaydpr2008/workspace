@@ -15,6 +15,12 @@ import {
 } from 'lucide-react';
 import { WorkspaceNode } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  compileStoryToMarkdown,
+  downloadFile,
+  copyToClipboard,
+} from '@/lib/compiler';
+import { DocumentExportButton } from '@/components/export/DocumentExportButton';
 
 interface StoryViewProps {
   node: WorkspaceNode;
@@ -99,6 +105,24 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
     }
   };
 
+  // Export handlers
+  const handleExportMarkdown = () => {
+    const md = compileStoryToMarkdown(node, nodes, childrenMap);
+    const slug = (node.title || 'story').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    downloadFile(md, `${slug}.md`, 'text/markdown;charset=utf-8');
+  };
+
+  const handleExportText = () => {
+    const md = compileStoryToMarkdown(node, nodes, childrenMap);
+    const slug = (node.title || 'story').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    downloadFile(md, `${slug}.txt`, 'text/plain;charset=utf-8');
+  };
+
+  const handleCopyClipboard = async () => {
+    const md = compileStoryToMarkdown(node, nodes, childrenMap);
+    return await copyToClipboard(md);
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
       {/* Top Meta Header */}
@@ -129,9 +153,9 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
           </div>
         </div>
 
-        {/* Stats & Save Status */}
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-1.5 text-xs font-mono">
+        {/* Stats, Export & Save Status */}
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-1.5 text-xs font-mono mr-2">
             {saveStatus === 'saving' && (
               <span className="flex items-center space-x-1.5 text-amber-400">
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
@@ -155,6 +179,15 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
               <span>Target: {node.properties?.target_words?.toLocaleString() || '80,000'} words</span>
             </div>
           </div>
+
+          {/* Document Compilation Export Dropdown */}
+          <DocumentExportButton
+            onExportPrimary={handleExportMarkdown}
+            primaryLabel="Export as Markdown"
+            primaryExtension=".md"
+            onExportPlainText={handleExportText}
+            onCopyClipboard={handleCopyClipboard}
+          />
         </div>
       </div>
 

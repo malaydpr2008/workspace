@@ -128,4 +128,16 @@ export async function createShotCoverage(
   return handleResponse(res);
 }
 
+export async function createCharacter(characterData: Partial<Character>): Promise<Character> {
+  const res = await fetch(`${API_BASE_URL}/characters/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(characterData),
+  });
+  return handleResponse<Character>(res);
+}
+
+
 

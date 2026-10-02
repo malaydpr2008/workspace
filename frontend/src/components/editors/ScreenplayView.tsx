@@ -7,15 +7,23 @@ import {
   Camera,
   Clock,
   Layers,
-  User,
   Plus,
   Trash2,
   Check,
   Link as LinkIcon,
   X,
+  LayoutGrid,
 } from 'lucide-react';
 import { WorkspaceNode, Shot } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  compileScreenplayToFountain,
+  downloadFile,
+  copyToClipboard,
+} from '@/lib/compiler';
+import { CharacterAutocompleteInput } from '@/components/editors/CharacterAutocompleteInput';
+import { DocumentExportButton } from '@/components/export/DocumentExportButton';
+import { StoryboardReelModal } from '@/components/storyboard/StoryboardReelModal';
 
 interface ScreenplayViewProps {
   node: WorkspaceNode;
@@ -42,6 +50,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
 
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
   const [userSelectedSceneId, setUserSelectedSceneId] = useState<string | null>(null);
+  const [isReelOpen, setIsReelOpen] = useState(false);
 
   // New shot form state
   const [isAddingShot, setIsAddingShot] = useState(false);
@@ -98,6 +107,24 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     return ids;
   }, [activeShot]);
 
+  // Export handlers
+  const handleExportFountain = () => {
+    const content = compileScreenplayToFountain(node, nodes, childrenMap, characters);
+    const filename = `${(node.title || 'screenplay').toLowerCase().replace(/\s+/g, '_')}.fountain`;
+    downloadFile(content, filename, 'text/plain;charset=utf-8');
+  };
+
+  const handleExportPlainText = () => {
+    const content = compileScreenplayToFountain(node, nodes, childrenMap, characters);
+    const filename = `${(node.title || 'screenplay').toLowerCase().replace(/\s+/g, '_')}.txt`;
+    downloadFile(content, filename, 'text/plain;charset=utf-8');
+  };
+
+  const handleCopyClipboard = async () => {
+    const content = compileScreenplayToFountain(node, nodes, childrenMap, characters);
+    return await copyToClipboard(content);
+  };
+
   // Focus helper
   const focusBlock = (blockId: string) => {
     setTimeout(() => {
@@ -124,7 +151,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
       e.preventDefault();
       if (!currentScene) return;
 
-      // Enter on empty action converts to character_cue / dialogue
+      // Enter on empty action converts to dialogue
       if (!block.content.trim()) {
         await changeBlockType(block.id, 'dialogue', { character_name: 'CHARACTER' });
         focusBlock(`${block.id}-char`);
@@ -172,23 +199,6 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
       const prevBlock = sceneBlocks[idx - 1];
       await deleteNode(block.id);
       if (prevBlock) focusBlock(prevBlock.id);
-    }
-  };
-
-  const handleCharacterNameKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-    block: WorkspaceNode
-  ) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      focusBlock(block.id);
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      const currentParen = block.properties?.parenthetical || '';
-      updateNodeProperties(block.id, {
-        parenthetical: currentParen ? '' : 'beat',
-      });
-      focusBlock(`${block.id}-paren`);
     }
   };
 
@@ -247,10 +257,10 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           </div>
         </div>
 
-        {/* Right Header Status & Scene Selector */}
-        <div className="flex items-center space-x-4">
+        {/* Right Header Status, Export & Scene Selector */}
+        <div className="flex items-center space-x-3">
           {/* Live Auto-save indicator */}
-          <div className="flex items-center space-x-1.5 text-xs font-mono">
+          <div className="flex items-center space-x-1.5 text-xs font-mono mr-1">
             {saveStatus === 'saving' && (
               <span className="flex items-center space-x-1.5 text-amber-400">
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
@@ -267,6 +277,15 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               <span className="text-slate-500 text-[11px]">Synced</span>
             )}
           </div>
+
+          {/* Export Dropdown */}
+          <DocumentExportButton
+            primaryLabel="Export Fountain (.fountain)"
+            primaryExtension="fountain"
+            onExportPrimary={handleExportFountain}
+            onExportPlainText={handleExportPlainText}
+            onCopyClipboard={handleCopyClipboard}
+          />
 
           {/* Scene Selector Pill Switcher */}
           {scenes.length > 1 && (
@@ -431,7 +450,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                             onKeyDown={(e) => handleActionKeyDown(e, block, idx)}
                             placeholder="Describe action, movement, or setting..."
                             rows={Math.max(2, block.content.split('\n').length)}
-                            className="w-full bg-transparent resize-none focus:outline-none text-slate-200 placeholder-slate-600 leading-relaxed"
+                            className="w-full bg-transparent resize-none focus:outline-none text-slate-200 placeholder-slate-600 leading-relaxed font-mono"
                           />
                         </div>
                       );
@@ -489,26 +508,30 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                             </div>
                           </div>
 
-                          {/* Character Name in Screenplay Format (Centered / Monospaced Uppercase) */}
+                          {/* Character Name with Fuzzy Autocomplete Dropdown */}
                           <div className="text-center">
-                            <div className="inline-flex items-center space-x-1.5 font-mono font-bold tracking-widest text-cyan-300 uppercase">
-                              <User className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                              <input
-                                ref={(el) => {
-                                  blockInputRefs.current[`${block.id}-char`] = el;
-                                }}
-                                type="text"
-                                value={characterName}
-                                onChange={(e) =>
-                                  updateNodeProperties(block.id, {
-                                    character_name: e.target.value.toUpperCase(),
-                                  })
-                                }
-                                onKeyDown={(e) => handleCharacterNameKeyDown(e, block)}
-                                placeholder="CHARACTER NAME"
-                                className="bg-transparent text-center focus:outline-none border-b border-dashed border-cyan-500/40 focus:border-cyan-400 text-xs w-44 tracking-widest uppercase font-mono"
-                              />
-                            </div>
+                            <CharacterAutocompleteInput
+                              blockId={block.id}
+                              characterName={characterName}
+                              characterId={characterId}
+                              onSelectCharacter={(char) => {
+                                updateNodeProperties(block.id, {
+                                  character_name: char.name,
+                                  character_id: char.id || undefined,
+                                });
+                              }}
+                              onEnterToDialogue={() => focusBlock(block.id)}
+                              onTabToParenthetical={() => {
+                                const currentParen = block.properties?.parenthetical || '';
+                                updateNodeProperties(block.id, {
+                                  parenthetical: currentParen ? '' : 'beat',
+                                });
+                                focusBlock(`${block.id}-paren`);
+                              }}
+                              inputRef={(el) => {
+                                blockInputRefs.current[`${block.id}-char`] = el;
+                              }}
+                            />
 
                             {/* Parenthetical (Optional, Tab to toggle) */}
                             {block.properties?.parenthetical !== undefined &&
@@ -595,16 +618,26 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             <div className="flex items-center space-x-2">
               <Camera className="w-4 h-4 text-cyan-400" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                Production Coverage & Shots
+                Production Coverage
               </h3>
             </div>
-            <button
-              onClick={() => setIsAddingShot(!isAddingShot)}
-              className="flex items-center space-x-1 px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-medium transition-all shadow-sm"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Shot</span>
-            </button>
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={() => setIsReelOpen(true)}
+                className="flex items-center space-x-1 px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded text-xs font-medium transition-all shadow-sm"
+                title="View full scene storyboard reel gallery"
+              >
+                <LayoutGrid className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Reel</span>
+              </button>
+              <button
+                onClick={() => setIsAddingShot(!isAddingShot)}
+                className="flex items-center space-x-1 px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-medium transition-all shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Shot</span>
+              </button>
+            </div>
           </div>
 
           <div className="px-4 py-2 bg-slate-900/40 border-b border-slate-800/40 text-[11px] text-slate-400 flex items-center justify-between">
@@ -693,7 +726,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                   type="url"
                   value={newShotUrl}
                   onChange={(e) => setNewShotUrl(e.target.value)}
-                  placeholder="https://..."
+                  placeholder="https://images.unsplash.com/..."
                   className="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-cyan-500"
                 />
               </div>
@@ -724,7 +757,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                 <Camera className="w-8 h-8 text-slate-600 mx-auto mb-2" />
                 <p className="text-xs text-slate-400 font-medium">No shots scheduled for this scene</p>
                 <p className="text-[11px] text-slate-600 mt-1">
-                  Click &ldquo;New Shot&rdquo; to add a camera coverage setup.
+                  Click &ldquo;Shot&rdquo; to add a camera coverage setup.
                 </p>
               </div>
             ) : (
@@ -810,6 +843,19 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           </div>
         </div>
       </div>
+
+      {/* Storyboard Reel Modal */}
+      <StoryboardReelModal
+        isOpen={isReelOpen}
+        onClose={() => setIsReelOpen(false)}
+        scene={currentScene}
+        shots={shots}
+        activeShotId={activeShot?.id || null}
+        onSelectShot={(id) => {
+          setActiveShotId(id);
+          setIsReelOpen(false);
+        }}
+      />
     </div>
   );
 };

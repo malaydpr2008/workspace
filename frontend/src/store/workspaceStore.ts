@@ -10,6 +10,7 @@ import {
   deleteNode as apiDeleteNode,
   createShot,
   createShotCoverage,
+  createCharacter,
 } from '@/lib/api';
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -76,6 +77,7 @@ interface WorkspaceState {
     blockId: string,
     sceneId: string
   ) => Promise<void>;
+  createWorkspaceCharacter: (name: string) => Promise<Character | null>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -553,4 +555,31 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       console.error('Failed to attach block to shot', err);
     }
   },
+
+  createWorkspaceCharacter: async (name: string) => {
+    const { currentWorkspace, characters } = get();
+    if (!currentWorkspace) return null;
+
+    try {
+      const created = await createCharacter({
+        workspace: currentWorkspace.id,
+        name: name.trim(),
+        avatar: '',
+        metadata: {},
+      });
+
+      set({
+        characters: {
+          ...characters,
+          [created.id]: created,
+        },
+      });
+
+      return created;
+    } catch (err) {
+      console.error('Failed to create character', err);
+      return null;
+    }
+  },
 }));
+
