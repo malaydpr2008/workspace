@@ -10,6 +10,8 @@ import {
   StripboardItem,
   ScriptNote,
   ProductionTake,
+  ADRCue,
+  AudioSpottingCue,
 } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -532,6 +534,116 @@ export async function deleteProductionTake(takeId: string): Promise<void> {
   if (!res.ok) {
     const errorBody = await res.text();
     throw new Error(`Delete take failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+// -------------------------------------------------------------
+// ADR Studio & Audio Spotting API
+// -------------------------------------------------------------
+
+export async function fetchADRCues(params?: {
+  workspace?: string;
+  character?: string;
+  status?: string;
+  dialogue_node?: string;
+}): Promise<ADRCue[]> {
+  const url = new URL(`${API_BASE_URL}/adr-cues/`);
+  if (params?.workspace) url.searchParams.set('workspace', params.workspace);
+  if (params?.character) url.searchParams.set('character', params.character);
+  if (params?.status) url.searchParams.set('status', params.status);
+  if (params?.dialogue_node) url.searchParams.set('dialogue_node', params.dialogue_node);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<ADRCue[]>(res);
+}
+
+export async function createADRCue(
+  data: Partial<ADRCue> & { dialogue_node: string; character: string; cue_number: string }
+): Promise<ADRCue> {
+  const res = await fetch(`${API_BASE_URL}/adr-cues/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ADRCue>(res);
+}
+
+export async function updateADRCue(
+  cueId: string,
+  data: Partial<ADRCue>
+): Promise<ADRCue> {
+  const res = await fetch(`${API_BASE_URL}/adr-cues/${cueId}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ADRCue>(res);
+}
+
+export async function updateADRCueStatus(
+  cueId: string,
+  status: string
+): Promise<ADRCue> {
+  const res = await fetch(`${API_BASE_URL}/adr-cues/${cueId}/update_status/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  return handleResponse<ADRCue>(res);
+}
+
+export async function deleteADRCue(cueId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/adr-cues/${cueId}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete ADR cue failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function fetchAudioSpottingCues(params?: {
+  workspace?: string;
+  scene?: string;
+  cue_type?: string;
+}): Promise<AudioSpottingCue[]> {
+  const url = new URL(`${API_BASE_URL}/audio-cues/`);
+  if (params?.workspace) url.searchParams.set('workspace', params.workspace);
+  if (params?.scene) url.searchParams.set('scene', params.scene);
+  if (params?.cue_type) url.searchParams.set('cue_type', params.cue_type);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<AudioSpottingCue[]>(res);
+}
+
+export async function createAudioSpottingCue(
+  data: Partial<AudioSpottingCue> & { scene: string; cue_name: string }
+): Promise<AudioSpottingCue> {
+  const res = await fetch(`${API_BASE_URL}/audio-cues/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<AudioSpottingCue>(res);
+}
+
+export async function updateAudioSpottingCue(
+  cueId: string,
+  data: Partial<AudioSpottingCue>
+): Promise<AudioSpottingCue> {
+  const res = await fetch(`${API_BASE_URL}/audio-cues/${cueId}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<AudioSpottingCue>(res);
+}
+
+export async function deleteAudioSpottingCue(cueId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/audio-cues/${cueId}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete audio spotting cue failed [${res.status}]: ${errorBody}`);
   }
 }
 

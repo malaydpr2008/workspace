@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q
 from django.db import transaction
 from core.models import (
@@ -17,6 +17,8 @@ from core.models import (
     StripboardItem,
     ScriptNote,
     ProductionTake,
+    ADRCue,
+    AudioSpottingCue,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -31,6 +33,8 @@ from core.serializers import (
     StripboardItemSerializer,
     ScriptNoteSerializer,
     ProductionTakeSerializer,
+    ADRCueSerializer,
+    AudioSpottingCueSerializer,
 )
 
 
@@ -386,5 +390,55 @@ class ProductionTakeViewSet(viewsets.ModelViewSet):
         take.is_circle_take = not take.is_circle_take
         take.save(update_fields=["is_circle_take"])
         return Response(ProductionTakeSerializer(take, context={"request": request}).data)
+
+
+class ADRCueViewSet(viewsets.ModelViewSet):
+    queryset = ADRCue.objects.all().select_related("character", "dialogue_node", "dialogue_node__parent").order_by("cue_number", "created_at")
+    serializer_class = ADRCueSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        workspace_id = self.request.query_params.get("workspace")
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+        character_id = self.request.query_params.get("character")
+        if character_id:
+            queryset = queryset.filter(character_id=character_id)
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        node_id = self.request.query_params.get("dialogue_node")
+        if node_id:
+            queryset = queryset.filter(dialogue_node_id=node_id)
+        return queryset
+
+    @action(detail=True, methods=["post"])
+    def update_status(self, request, pk=None):
+        cue = self.get_object()
+        new_status = request.data.get("status")
+        if not new_status:
+            return Response({"error": "Status is required"}, status=status.HTTP_400_BAD_REQUEST)
+        cue.status = new_status
+        cue.save(update_fields=["status"])
+        return Response(ADRCueSerializer(cue, context={"request": request}).data)
+
+
+class AudioSpottingCueViewSet(viewsets.ModelViewSet):
+    queryset = AudioSpottingCue.objects.all().select_related("scene").order_by("created_at")
+    serializer_class = AudioSpottingCueSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        workspace_id = self.request.query_params.get("workspace")
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+        scene_id = self.request.query_params.get("scene")
+        if scene_id:
+            queryset = queryset.filter(scene_id=scene_id)
+        cue_type = self.request.query_params.get("cue_type")
+        if cue_type:
+            queryset = queryset.filter(cue_type=cue_type)
+        return queryset
 
 

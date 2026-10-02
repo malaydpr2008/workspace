@@ -12,6 +12,8 @@ import {
   StripboardItem,
   ScriptNote,
   ProductionTake,
+  ADRCue,
+  AudioSpottingCue,
 } from '@/types/workspace';
 import {
   fetchWorkspaces,
@@ -55,6 +57,13 @@ import {
   updateProductionTake,
   toggleCircleTake,
   deleteProductionTake,
+  fetchADRCues,
+  createADRCue,
+  updateADRCueStatus,
+  deleteADRCue,
+  fetchAudioSpottingCues,
+  createAudioSpottingCue,
+  deleteAudioSpottingCue,
 } from '@/lib/api';
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -77,6 +86,8 @@ interface WorkspaceState {
   stripboardItems: StripboardItem[];
   notesByNode: Record<string, ScriptNote[]>;
   takesByShot: Record<string, ProductionTake[]>;
+  adrCues: Record<string, ADRCue[]>;
+  audioCuesByScene: Record<string, AudioSpottingCue[]>;
   isLoading: boolean;
   saveStatus: 'idle' | 'saving' | 'saved';
   error: string | null;
@@ -201,6 +212,17 @@ interface WorkspaceState {
   ) => Promise<ProductionTake | null>;
   toggleCircleTakeItem: (takeId: string, shotId: string) => Promise<ProductionTake | null>;
   deleteProductionTakeItem: (takeId: string, shotId: string) => Promise<void>;
+  loadADRCues: (workspaceId?: string) => Promise<ADRCue[]>;
+  createADRCueItem: (
+    data: Partial<ADRCue> & { dialogue_node: string; character: string; cue_number: string }
+  ) => Promise<ADRCue | null>;
+  updateADRCueStatusItem: (cueId: string, status: string, dialogueNodeId: string) => Promise<ADRCue | null>;
+  deleteADRCueItem: (cueId: string, dialogueNodeId: string) => Promise<void>;
+  loadAudioCuesForScene: (sceneId: string) => Promise<AudioSpottingCue[]>;
+  createAudioSpottingCueItem: (
+    data: Partial<AudioSpottingCue> & { scene: string; cue_name: string }
+  ) => Promise<AudioSpottingCue | null>;
+  deleteAudioSpottingCueItem: (cueId: string, sceneId: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -220,6 +242,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   stripboardItems: [],
   notesByNode: {},
   takesByShot: {},
+  adrCues: {},
+  audioCuesByScene: {},
   isLoading: false,
   saveStatus: 'idle',
   error: null,
@@ -1397,6 +1421,139 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       });
     } catch (err) {
       console.error('Failed to delete production take', err);
+    }
+  },
+
+  loadADRCues: async (workspaceId?: string) => {
+    try {
+      const list = await fetchADRCues({ workspace: workspaceId });
+      const grouped: Record<string, ADRCue[]> = {};
+      list.forEach((c) => {
+        const nid = c.dialogue_node;
+        if (!grouped[nid]) grouped[nid] = [];
+        grouped[nid].push(c);
+      });
+      set((state) => ({
+        adrCues: {
+          ...state.adrCues,
+          ...grouped,
+        },
+      }));
+      return list;
+    } catch (err) {
+      console.error('Failed to load ADR cues', err);
+      return [];
+    }
+  },
+
+  createADRCueItem: async (data) => {
+    try {
+      const created = await createADRCue(data);
+      const nid = data.dialogue_node;
+      set((state) => {
+        const current = state.adrCues[nid] || [];
+        return {
+          adrCues: {
+            ...state.adrCues,
+            [nid]: [...current, created],
+          },
+        };
+      });
+      return created;
+    } catch (err) {
+      console.error('Failed to create ADR cue', err);
+      return null;
+    }
+  },
+
+  updateADRCueStatusItem: async (cueId: string, status: string, dialogueNodeId: string) => {
+    try {
+      const updated = await updateADRCueStatus(cueId, status);
+      set((state) => {
+        const current = state.adrCues[dialogueNodeId] || [];
+        return {
+          adrCues: {
+            ...state.adrCues,
+            [dialogueNodeId]: current.map((c) =>
+              c.id === cueId ? { ...c, status: updated.status } : c
+            ),
+          },
+        };
+      });
+      return updated;
+    } catch (err) {
+      console.error('Failed to update ADR cue status', err);
+      return null;
+    }
+  },
+
+  deleteADRCueItem: async (cueId: string, dialogueNodeId: string) => {
+    try {
+      await deleteADRCue(cueId);
+      set((state) => {
+        const current = state.adrCues[dialogueNodeId] || [];
+        return {
+          adrCues: {
+            ...state.adrCues,
+            [dialogueNodeId]: current.filter((c) => c.id !== cueId),
+          },
+        };
+      });
+    } catch (err) {
+      console.error('Failed to delete ADR cue', err);
+    }
+  },
+
+  loadAudioCuesForScene: async (sceneId: string) => {
+    try {
+      const list = await fetchAudioSpottingCues({ scene: sceneId });
+      set((state) => ({
+        audioCuesByScene: {
+          ...state.audioCuesByScene,
+          [sceneId]: list,
+        },
+      }));
+      return list;
+    } catch (err) {
+      console.error('Failed to load audio cues for scene', sceneId, err);
+      return [];
+    }
+  },
+
+  createAudioSpottingCueItem: async (data) => {
+    try {
+      const created = await createAudioSpottingCue(data);
+      const sid = data.scene;
+      set((state) => {
+        const current = state.audioCuesByScene[sid] || [];
+        return {
+          audioCuesByScene: {
+            ...state.audioCuesByScene,
+            [sid]: [...current, created],
+          },
+        };
+      });
+      return created;
+    } catch (err) {
+      console.error('Failed to create audio spotting cue', err);
+      return null;
+    }
+  },
+
+  deleteAudioSpottingCueItem: async (cueId: string, sceneId: string) => {
+    try {
+      await deleteAudioSpottingCue(cueId);
+      set((state) => {
+        const current = state.audioCuesByScene[sceneId] || [];
+        return {
+          audioCuesByScene: {
+            ...state.audioCuesByScene,
+            [sceneId]: current.filter((c) => c.id !== cueId),
+          },
+        };
+      });
+    } catch (err) {
+      console.error('Failed to delete audio spotting cue', err);
     }
   },
 }));

@@ -13,6 +13,8 @@ from core.views import (
     StripboardItemViewSet,
     ScriptNoteViewSet,
     ProductionTakeViewSet,
+    ADRCueViewSet,
+    AudioSpottingCueViewSet,
 )
 
 router = DefaultRouter()
@@ -31,6 +33,9 @@ router.register(r"notes", ScriptNoteViewSet, basename="scriptnote")
 router.register(r"script-notes", ScriptNoteViewSet, basename="scriptnotes")
 router.register(r"takes", ProductionTakeViewSet, basename="productiontake")
 router.register(r"production-takes", ProductionTakeViewSet, basename="productiontakes")
+router.register(r"adr-cues", ADRCueViewSet, basename="adrcue")
+router.register(r"audio-cues", AudioSpottingCueViewSet, basename="audiospottingcue")
+router.register(r"audio-spotting-cues", AudioSpottingCueViewSet, basename="audiospottingcues")
 
 urlpatterns = [
     path("", include(router.urls)),

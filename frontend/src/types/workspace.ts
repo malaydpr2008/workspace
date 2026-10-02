@@ -174,3 +174,64 @@ export interface ProductionTake {
   created_at: string;
 }
 
+export type ADRReason =
+  | 'NOISE'
+  | 'PERFORMANCE'
+  | 'LINE_CHANGE'
+  | 'TV_CLEAN'
+  | 'ACCENT'
+  | 'OTHER';
+
+export type ADRPriority = 'CRITICAL' | 'STANDARD' | 'OPTIONAL';
+
+export type ADRStatus =
+  | 'NEEDS_REVIEW'
+  | 'SCHEDULED'
+  | 'RECORDED'
+  | 'APPROVED'
+  | 'OMITTED';
+
+export interface ADRCue {
+  id: string;
+  workspace: string;
+  dialogue_node: string;
+  character: string;
+  character_name?: string;
+  dialogue_content?: string;
+  scene_id?: string;
+  scene_title?: string;
+  cue_number: string;
+  reason: ADRReason;
+  priority: ADRPriority;
+  status: ADRStatus;
+  timecode_in: string;
+  timecode_out: string;
+  actor_notes: string;
+  audio_file?: string | null;
+  created_at: string;
+}
+
+export type AudioCueType =
+  | 'SCORE'
+  | 'SOURCE_MUSIC'
+  | 'FOLEY'
+  | 'SFX'
+  | 'AMBIENCE';
+
+export type AudioIntensity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CLIMACTIC';
+
+export interface AudioSpottingCue {
+  id: string;
+  workspace: string;
+  scene: string;
+  scene_title?: string;
+  cue_type: AudioCueType;
+  cue_name: string;
+  timecode_in: string;
+  timecode_out: string;
+  notes: string;
+  intensity: AudioIntensity;
+  created_at: string;
+}
+
+

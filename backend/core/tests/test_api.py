@@ -14,6 +14,8 @@ from core.models import (
     StripboardItem,
     ScriptNote,
     ProductionTake,
+    ADRCue,
+    AudioSpottingCue,
 )
 
 
@@ -553,4 +555,101 @@ class ScriptNoteAndProductionTakeAPITests(APITestCase):
         list_resp = self.client.get(f"{take_url}?shot={self.shot.id}")
         self.assertEqual(list_resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(list_resp.data), 2)
+
+
+class ADRCueAndAudioSpottingAPITests(APITestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Sound Studio", slug="sound-studio")
+        self.character = Character.objects.create(
+            workspace=self.workspace,
+            name="Elena Rostova",
+        )
+        self.script = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            type="screenplay",
+            title="Solaris Protocol",
+            rank="0|h0:",
+        )
+        self.scene = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.script,
+            type="scene",
+            title="INT. AIRLOCK - NIGHT",
+            rank="0|h1:",
+        )
+        self.dialogue = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.scene,
+            type="dialogue",
+            content="Close the primary blast door now!",
+            rank="0|h2:",
+        )
+
+    def test_adr_cue_creation_status_update_and_filtering(self):
+        adr_url = reverse("adrcue-list")
+
+        # 1. Create ADR Cue
+        create_resp = self.client.post(
+            adr_url,
+            {
+                "dialogue_node": str(self.dialogue.id),
+                "character": str(self.character.id),
+                "cue_number": "ELN-001",
+                "reason": "NOISE",
+                "priority": "CRITICAL",
+                "status": "NEEDS_REVIEW",
+                "timecode_in": "01:14:22:10",
+                "timecode_out": "01:14:26:05",
+                "actor_notes": "Wind machine audible in mic track. Needs urgent re-loop.",
+            },
+            format="json",
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        cue_id = create_resp.data["id"]
+        self.assertEqual(create_resp.data["cue_number"], "ELN-001")
+        self.assertEqual(create_resp.data["character_name"], "Elena Rostova")
+        self.assertEqual(create_resp.data["dialogue_content"], "Close the primary blast door now!")
+        self.assertEqual(create_resp.data["scene_title"], "INT. AIRLOCK - NIGHT")
+        self.assertEqual(create_resp.data["status"], "NEEDS_REVIEW")
+
+        # 2. Update status action
+        status_url = reverse("adrcue-update-status", kwargs={"pk": cue_id})
+        update_resp = self.client.post(status_url, {"status": "APPROVED"}, format="json")
+        self.assertEqual(update_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_resp.data["status"], "APPROVED")
+
+        # 3. Filter by character and status
+        filter_resp = self.client.get(f"{adr_url}?character={self.character.id}&status=APPROVED")
+        self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(filter_resp.data), 1)
+        self.assertEqual(filter_resp.data[0]["id"], cue_id)
+
+    def test_audio_spotting_cue_creation_and_filtering(self):
+        spotting_url = reverse("audiospottingcue-list")
+
+        # 1. Create Audio Spotting Cue
+        create_resp = self.client.post(
+            spotting_url,
+            {
+                "scene": str(self.scene.id),
+                "cue_type": "SCORE",
+                "cue_name": "Airlock Tension Theme",
+                "timecode_in": "01:14:00:00",
+                "timecode_out": "01:15:30:00",
+                "notes": "Low cello drone with rising synth pulse.",
+                "intensity": "HIGH",
+            },
+            format="json",
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        cue_id = create_resp.data["id"]
+        self.assertEqual(create_resp.data["cue_name"], "Airlock Tension Theme")
+        self.assertEqual(create_resp.data["scene_title"], "INT. AIRLOCK - NIGHT")
+        self.assertEqual(create_resp.data["intensity"], "HIGH")
+
+        # 2. Filter by scene and cue_type
+        filter_resp = self.client.get(f"{spotting_url}?scene={self.scene.id}&cue_type=SCORE")
+        self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(filter_resp.data), 1)
+        self.assertEqual(filter_resp.data[0]["id"], cue_id)
 

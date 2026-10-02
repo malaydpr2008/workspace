@@ -12,6 +12,8 @@ from core.models import (
     StripboardItem,
     ScriptNote,
     ProductionTake,
+    ADRCue,
+    AudioSpottingCue,
 )
 
 
@@ -221,4 +223,84 @@ class ProductionTakeSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "created_at"]
+
+
+class ADRCueSerializer(serializers.ModelSerializer):
+    workspace = serializers.PrimaryKeyRelatedField(
+        queryset=Workspace.objects.all(), required=False
+    )
+    character_name = serializers.CharField(source="character.name", read_only=True)
+    dialogue_content = serializers.CharField(source="dialogue_node.content", read_only=True)
+    scene_id = serializers.SerializerMethodField()
+    scene_title = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ADRCue
+        fields = [
+            "id",
+            "workspace",
+            "dialogue_node",
+            "character",
+            "character_name",
+            "dialogue_content",
+            "scene_id",
+            "scene_title",
+            "cue_number",
+            "reason",
+            "priority",
+            "status",
+            "timecode_in",
+            "timecode_out",
+            "actor_notes",
+            "audio_file",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def get_scene_id(self, obj):
+        if obj.dialogue_node and obj.dialogue_node.parent:
+            return str(obj.dialogue_node.parent_id)
+        return None
+
+    def get_scene_title(self, obj):
+        if obj.dialogue_node and obj.dialogue_node.parent:
+            return obj.dialogue_node.parent.title
+        return None
+
+    def validate(self, attrs):
+        if "workspace" not in attrs:
+            if "dialogue_node" in attrs:
+                attrs["workspace"] = attrs["dialogue_node"].workspace
+            elif "character" in attrs:
+                attrs["workspace"] = attrs["character"].workspace
+        return attrs
+
+
+class AudioSpottingCueSerializer(serializers.ModelSerializer):
+    workspace = serializers.PrimaryKeyRelatedField(
+        queryset=Workspace.objects.all(), required=False
+    )
+    scene_title = serializers.CharField(source="scene.title", read_only=True)
+
+    class Meta:
+        model = AudioSpottingCue
+        fields = [
+            "id",
+            "workspace",
+            "scene",
+            "scene_title",
+            "cue_type",
+            "cue_name",
+            "timecode_in",
+            "timecode_out",
+            "notes",
+            "intensity",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def validate(self, attrs):
+        if "workspace" not in attrs and "scene" in attrs:
+            attrs["workspace"] = attrs["scene"].workspace
+        return attrs
 

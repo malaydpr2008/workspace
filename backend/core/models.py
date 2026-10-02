@@ -298,3 +298,91 @@ class ProductionTake(models.Model):
         star = " ⭐" if self.is_circle_take else ""
         return f"Shot {self.shot_id} - Take {self.take_number}{star}"
 
+
+class ADRCue(models.Model):
+    REASON_CHOICES = [
+        ("NOISE", "Noise / Audio Issue"),
+        ("PERFORMANCE", "Performance / Delivery"),
+        ("LINE_CHANGE", "Line Change / Alt Take"),
+        ("TV_CLEAN", "TV Clean / Censorship"),
+        ("ACCENT", "Accent / Diction"),
+        ("OTHER", "Other"),
+    ]
+
+    PRIORITY_CHOICES = [
+        ("CRITICAL", "Critical"),
+        ("STANDARD", "Standard"),
+        ("OPTIONAL", "Optional"),
+    ]
+
+    STATUS_CHOICES = [
+        ("NEEDS_REVIEW", "Needs Review"),
+        ("SCHEDULED", "Scheduled"),
+        ("RECORDED", "Recorded"),
+        ("APPROVED", "Approved"),
+        ("OMITTED", "Omitted"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="adr_cues")
+    dialogue_node = models.ForeignKey(WorkspaceNode, on_delete=models.CASCADE, related_name="adr_cues")
+    character = models.ForeignKey(Character, on_delete=models.CASCADE, related_name="adr_cues")
+    cue_number = models.CharField(max_length=30)
+    reason = models.CharField(max_length=50, choices=REASON_CHOICES, default="NOISE")
+    priority = models.CharField(max_length=30, choices=PRIORITY_CHOICES, default="STANDARD")
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="NEEDS_REVIEW")
+    timecode_in = models.CharField(max_length=30, blank=True, default="01:00:00:00")
+    timecode_out = models.CharField(max_length=30, blank=True, default="01:00:05:00")
+    actor_notes = models.TextField(blank=True)
+    audio_file = models.FileField(upload_to="adr_takes/", blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["cue_number", "created_at"]
+        indexes = [
+            models.Index(fields=["workspace", "status"]),
+            models.Index(fields=["dialogue_node"]),
+            models.Index(fields=["character"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.cue_number}] {self.character.name}: {self.reason} ({self.status})"
+
+
+class AudioSpottingCue(models.Model):
+    CUE_TYPE_CHOICES = [
+        ("SCORE", "Score / Score Music"),
+        ("SOURCE_MUSIC", "Source Music / Diegetic"),
+        ("FOLEY", "Foley"),
+        ("SFX", "Sound Effects"),
+        ("AMBIENCE", "Environmental Ambience"),
+    ]
+
+    INTENSITY_CHOICES = [
+        ("LOW", "Low / Subtle"),
+        ("MEDIUM", "Medium"),
+        ("HIGH", "High / Energetic"),
+        ("CLIMACTIC", "Climactic / Dramatic"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="audio_spotting_cues")
+    scene = models.ForeignKey(WorkspaceNode, on_delete=models.CASCADE, related_name="audio_spotting_cues")
+    cue_type = models.CharField(max_length=50, choices=CUE_TYPE_CHOICES, default="SCORE")
+    cue_name = models.CharField(max_length=150)
+    timecode_in = models.CharField(max_length=30, blank=True)
+    timecode_out = models.CharField(max_length=30, blank=True)
+    notes = models.TextField(blank=True)
+    intensity = models.CharField(max_length=30, choices=INTENSITY_CHOICES, default="MEDIUM")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["workspace", "cue_type"]),
+            models.Index(fields=["scene"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.cue_type}] {self.cue_name} ({self.scene_id})"
+

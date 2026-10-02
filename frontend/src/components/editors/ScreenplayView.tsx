@@ -21,6 +21,8 @@ import {
   History,
   Calendar,
   MessageSquare,
+  Mic,
+  Music,
 } from 'lucide-react';
 import { WorkspaceNode, Shot, RevisionColor } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -46,6 +48,9 @@ import { RevisionDraftSelector } from '@/components/editors/RevisionDraftSelecto
 import { VersionHistoryModal } from '@/components/history/VersionHistoryModal';
 import { ScriptNotesDrawer } from '@/components/notes/ScriptNotesDrawer';
 import { TakeLoggerModal } from '@/components/storyboard/TakeLoggerModal';
+import { ADRCueModal } from '@/components/audio/ADRCueModal';
+import { ADRRecordingSheetView } from '@/components/audio/ADRRecordingSheetView';
+import { AudioSpottingDrawer } from '@/components/audio/AudioSpottingDrawer';
 import { exportProductionBibleZip } from '@/lib/productionBible';
 import {
   getRevisionConfig,
@@ -66,10 +71,14 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     breakdownElements,
     currentWorkspace,
     notesByNode,
+    adrCues,
+    audioCuesByScene,
     loadNotesForWorkspace,
     loadBreakdownElements,
     loadSceneShots,
     loadNodeChildren,
+    loadADRCues,
+    loadAudioCuesForScene,
     updateNodeContent,
     updateNodeTitle,
     updateNodeProperties,
@@ -89,7 +98,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [userSelectedSceneId, setUserSelectedSceneId] = useState<string | null>(null);
   const [isReelOpen, setIsReelOpen] = useState(false);
   const [viewMode, setViewMode] = useState<
-    'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics' | 'stripboard'
+    'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics' | 'stripboard' | 'adr'
   >('editor');
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -99,6 +108,11 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState(false);
   const [notesAnchorNodeId, setNotesAnchorNodeId] = useState<string | null>(null);
   const [takeLoggerShot, setTakeLoggerShot] = useState<Shot | null>(null);
+
+  // Audio Spotting Drawer & ADR Cue Modal State
+  const [isAudioSpottingOpen, setIsAudioSpottingOpen] = useState(false);
+  const [audioSpottingScene, setAudioSpottingScene] = useState<WorkspaceNode | null>(null);
+  const [activeADRBlock, setActiveADRBlock] = useState<WorkspaceNode | null>(null);
 
   // Breakdown tag popover state
   const [activeTagPopoverBlockId, setActiveTagPopoverBlockId] = useState<string | null>(null);
@@ -143,17 +157,19 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   useEffect(() => {
     if (currentWorkspace?.id) {
       loadNotesForWorkspace(currentWorkspace.id);
+      loadADRCues(currentWorkspace.id);
     }
-  }, [currentWorkspace?.id, loadNotesForWorkspace]);
+  }, [currentWorkspace?.id, loadNotesForWorkspace, loadADRCues]);
 
   useEffect(() => {
     if (activeSceneId) {
       loadSceneShots(activeSceneId);
+      loadAudioCuesForScene(activeSceneId);
       if (!childrenMap[activeSceneId]) {
         loadNodeChildren(activeSceneId);
       }
     }
-  }, [activeSceneId, loadSceneShots, loadNodeChildren, childrenMap]);
+  }, [activeSceneId, loadSceneShots, loadAudioCuesForScene, loadNodeChildren, childrenMap]);
 
   const currentScene = nodes[activeSceneId] || (isScene ? node : null);
   const sceneBlocks = currentScene
@@ -566,6 +582,17 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               <Calendar className="w-3.5 h-3.5" />
               <span>Stripboard</span>
             </button>
+            <button
+              onClick={() => setViewMode('adr')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'adr'
+                  ? 'bg-amber-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>ADR Sheet</span>
+            </button>
           </div>
 
           {/* Actor Sides Generator Button */}
@@ -712,6 +739,12 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           screenplayNode={node}
           scenes={scenes}
         />
+      ) : viewMode === 'adr' ? (
+        <ADRRecordingSheetView
+          screenplayNode={node}
+          nodes={nodes}
+          characters={characters}
+        />
       ) : (
         <div className="flex-1 flex overflow-hidden">
         {/* Left: Script Flow (Courier Prime / Monospace standard format) */}
@@ -799,6 +832,29 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                         >
                           <MessageSquare className="w-2.5 h-2.5" />
                           <span>Note</span>
+                        </button>
+                      );
+                    })()}
+
+                    {/* Scene Audio Spotting Drawer Button */}
+                    {(() => {
+                      const sceneAudioCues = audioCuesByScene[currentScene.id] || [];
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAudioSpottingScene(currentScene);
+                            setIsAudioSpottingOpen(true);
+                          }}
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono border flex items-center space-x-1 transition-all ${
+                            sceneAudioCues.length > 0
+                              ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/30'
+                              : 'text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 border-transparent'
+                          }`}
+                          title={`Audio Spotting markers for this scene (${sceneAudioCues.length})`}
+                        >
+                          <Music className="w-3 h-3 text-indigo-400" />
+                          <span>Spotting{sceneAudioCues.length > 0 ? ` (${sceneAudioCues.length})` : ''}</span>
                         </button>
                       );
                     })()}
@@ -1158,6 +1214,35 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                                   >
                                     <MessageSquare className="w-2.5 h-2.5" />
                                     <span>Note</span>
+                                  </button>
+                                );
+                              })()}
+
+                              {/* Dialogue Block ADR Tag / Cue Badge */}
+                              {(() => {
+                                const blockCues = adrCues[block.id] || [];
+                                return blockCues.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveADRBlock(block)}
+                                    className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all shadow-sm"
+                                    title={`ADR Cue: ${blockCues[0].cue_number} (${blockCues[0].status})`}
+                                  >
+                                    <Mic className="w-2.5 h-2.5 text-amber-400" />
+                                    <span>{blockCues[0].cue_number}</span>
+                                    {blockCues.length > 1 && (
+                                      <span className="text-[9px] text-amber-400/80">+{blockCues.length - 1}</span>
+                                    )}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveADRBlock(block)}
+                                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-500 hover:text-amber-400 hover:bg-slate-800/80 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Tag dialogue block for ADR re-recording"
+                                  >
+                                    <Mic className="w-2.5 h-2.5" />
+                                    <span>ADR</span>
                                   </button>
                                 );
                               })()}
@@ -1683,6 +1768,40 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         onClose={() => setTakeLoggerShot(null)}
         shot={takeLoggerShot}
         scene={currentScene}
+      />
+
+      {/* ADR Cue Creation / Management Modal */}
+      {activeADRBlock && (
+        <ADRCueModal
+          isOpen={Boolean(activeADRBlock)}
+          onClose={() => setActiveADRBlock(null)}
+          dialogueBlock={activeADRBlock}
+          character={
+            activeADRBlock.properties?.character_id
+              ? characters[activeADRBlock.properties.character_id] || null
+              : null
+          }
+          characterName={
+            activeADRBlock.properties?.character_name ||
+            (activeADRBlock.properties?.character_id
+              ? characters[activeADRBlock.properties.character_id]?.name || ''
+              : '')
+          }
+          existingCues={activeADRBlock ? adrCues[activeADRBlock.id] || [] : []}
+        />
+      )}
+
+      {/* Audio Spotting Session Drawer */}
+      <AudioSpottingDrawer
+        isOpen={isAudioSpottingOpen}
+        onClose={() => setIsAudioSpottingOpen(false)}
+        scene={audioSpottingScene || currentScene}
+        scenes={scenes}
+        onSelectScene={(sceneId) => {
+          setUserSelectedSceneId(sceneId);
+          const found = scenes.find((s) => s.id === sceneId);
+          if (found) setAudioSpottingScene(found);
+        }}
       />
     </div>
   );
