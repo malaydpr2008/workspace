@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
+  skipTrailingSlashRedirect: true,
   async rewrites() {
     // Inside Docker, the backend container is resolved via the service name `backend`
     // On local machine outside Docker, fallback to localhost:8000

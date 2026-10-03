@@ -33,7 +33,7 @@ services:
       - PYTHONUNBUFFERED=1
       - DJANGO_SETTINGS_MODULE=config.settings
       - DATABASE_URL=postgres://postgres:postgrespassword@db:5432/workspace_db
-      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend,[::1],*
       - DEBUG=1
     networks:
       - workspace-net
@@ -58,8 +58,8 @@ services:
       - NODE_ENV=production
       # Used by Next.js server-side fetches and rewrites inside the Docker network:
       - INTERNAL_BACKEND_URL=http://backend:8000
-      # Used by client-side browser fetches hitting port 8000 directly:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # Used by client-side browser fetches hitting backend port 8000:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
     depends_on:
       backend:
         condition: service_healthy
