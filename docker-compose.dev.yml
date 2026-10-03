@@ -33,6 +33,7 @@ services:
       - DATABASE_URL=postgres://postgres:postgrespassword@db:5432/workspace_db
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend
       - DEBUG=True
+      # Note: REDIS_URL omitted so Django Channels defaults to InMemoryChannelLayer
     volumes:
       - ./backend:/app
       - /app/__pycache__
@@ -55,7 +56,9 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
+      # Internal Docker DNS for Next.js SSR / API rewrites:
       - INTERNAL_BACKEND_URL=http://backend:8000
+      # Direct browser endpoint for client-side fetches:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
     volumes:
       - ./frontend:/app
