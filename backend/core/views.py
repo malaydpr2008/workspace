@@ -24,6 +24,7 @@ from core.models import (
     BudgetCategory,
     BudgetLineItem,
     ProductionMilestone,
+    WorkspaceMembership,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -44,7 +45,9 @@ from core.serializers import (
     BudgetCategorySerializer,
     BudgetLineItemSerializer,
     ProductionMilestoneSerializer,
+    WorkspaceMembershipSerializer,
 )
+from core.permissions import RolePermissionPolicy
 
 
 class WorkspaceViewSet(viewsets.ModelViewSet):
@@ -890,6 +893,54 @@ class ProductionMilestoneViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(created_milestones, many=True)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class WorkspaceMembershipViewSet(viewsets.ModelViewSet):
+    queryset = WorkspaceMembership.objects.all().select_related("workspace", "user")
+    serializer_class = WorkspaceMembershipSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        workspace_id = self.request.query_params.get("workspace")
+        if workspace_id:
+            qs = qs.filter(workspace_id=workspace_id)
+        role = self.request.query_params.get("role")
+        if role:
+            qs = qs.filter(role=role.upper())
+        return qs
+
+    @action(detail=False, methods=["get"])
+    def current_user_role(self, request):
+        workspace_id = request.query_params.get("workspace")
+        email = request.query_params.get("email")
+
+        membership = None
+        if workspace_id:
+            if request.user and request.user.is_authenticated:
+                membership = WorkspaceMembership.objects.filter(
+                    workspace_id=workspace_id, user=request.user, is_active=True
+                ).first()
+            if not membership and email:
+                membership = WorkspaceMembership.objects.filter(
+                    workspace_id=workspace_id, email__iexact=email.strip(), is_active=True
+                ).first()
+
+        if membership:
+            role = membership.role
+            capabilities = RolePermissionPolicy.get_capabilities(role)
+            return Response({
+                "role": role,
+                "capabilities": capabilities,
+                "membership": WorkspaceMembershipSerializer(membership).data,
+            })
+
+        # Default fallback for studio administration
+        role = "OWNER"
+        return Response({
+            "role": role,
+            "capabilities": RolePermissionPolicy.get_capabilities(role),
+            "membership": None,
+        })
 
 
 

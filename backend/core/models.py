@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.contrib.auth.models import User
 from django.contrib.postgres.indexes import GinIndex
 
 # In Django, models.JSONField natively maps to JSONB in PostgreSQL.
@@ -511,5 +512,41 @@ class ProductionMilestone(models.Model):
 
     def __str__(self):
         return f"[{self.phase}] {self.title} ({self.progress_percentage}%)"
+
+
+class WorkspaceMembership(models.Model):
+    ROLE_CHOICES = [
+        ("OWNER", "Studio Executive / Owner"),
+        ("PRODUCER", "Producer"),
+        ("DIRECTOR", "Director"),
+        ("WRITER", "Writer"),
+        ("DEPT_HEAD", "Head of Department"),
+        ("ACTOR", "Actor"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="workspace_memberships"
+    )
+    email = models.EmailField()
+    name = models.CharField(max_length=150)
+    role = models.CharField(max_length=40, choices=ROLE_CHOICES, default="WRITER")
+    department = models.CharField(max_length=60, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["workspace", "email"], name="unique_workspace_membership_email")
+        ]
+        indexes = [
+            models.Index(fields=["workspace", "email"]),
+            models.Index(fields=["workspace", "role"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} <{self.email}> - {self.role} ({self.workspace.name})"
 
 

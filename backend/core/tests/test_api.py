@@ -20,7 +20,9 @@ from core.models import (
     BudgetCategory,
     BudgetLineItem,
     ProductionMilestone,
+    WorkspaceMembership,
 )
+from core.permissions import RolePermissionPolicy
 
 
 class WorkspaceNodeAPITests(APITestCase):
@@ -868,6 +870,134 @@ class ProductionMilestoneAPITests(APITestCase):
 
         # Verify DB records
         self.assertEqual(ProductionMilestone.objects.filter(screenplay=self.screenplay).count(), 8)
+
+
+class WorkspaceMembershipAndRBACAPITests(APITestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Starlight Pictures", slug="starlight-pictures")
+        self.other_workspace = Workspace.objects.create(name="Indie Lab", slug="indie-lab")
+
+    def test_role_permission_policy_capabilities(self):
+        # 1. OWNER
+        self.assertTrue(RolePermissionPolicy.can_edit_script("OWNER"))
+        self.assertTrue(RolePermissionPolicy.can_edit_budget("OWNER"))
+        self.assertTrue(RolePermissionPolicy.can_lock_scenes("OWNER"))
+        self.assertTrue(RolePermissionPolicy.can_manage_members("OWNER"))
+
+        # 2. PRODUCER
+        self.assertTrue(RolePermissionPolicy.can_edit_script("PRODUCER"))
+        self.assertTrue(RolePermissionPolicy.can_edit_budget("PRODUCER"))
+        self.assertTrue(RolePermissionPolicy.can_lock_scenes("PRODUCER"))
+        self.assertTrue(RolePermissionPolicy.can_manage_members("PRODUCER"))
+
+        # 3. DIRECTOR
+        self.assertTrue(RolePermissionPolicy.can_edit_script("DIRECTOR"))
+        self.assertFalse(RolePermissionPolicy.can_edit_budget("DIRECTOR"))
+        self.assertTrue(RolePermissionPolicy.can_lock_scenes("DIRECTOR"))
+        self.assertFalse(RolePermissionPolicy.can_manage_members("DIRECTOR"))
+
+        # 4. WRITER
+        self.assertTrue(RolePermissionPolicy.can_edit_script("WRITER"))
+        self.assertFalse(RolePermissionPolicy.can_edit_budget("WRITER"))
+        self.assertFalse(RolePermissionPolicy.can_lock_scenes("WRITER"))
+        self.assertFalse(RolePermissionPolicy.can_manage_members("WRITER"))
+
+        # 5. DEPT_HEAD
+        self.assertFalse(RolePermissionPolicy.can_edit_script("DEPT_HEAD"))
+        self.assertFalse(RolePermissionPolicy.can_edit_budget("DEPT_HEAD"))
+        self.assertFalse(RolePermissionPolicy.can_lock_scenes("DEPT_HEAD"))
+        self.assertFalse(RolePermissionPolicy.can_manage_members("DEPT_HEAD"))
+
+        # 6. ACTOR
+        self.assertFalse(RolePermissionPolicy.can_edit_script("ACTOR"))
+        self.assertFalse(RolePermissionPolicy.can_edit_budget("ACTOR"))
+        self.assertFalse(RolePermissionPolicy.can_lock_scenes("ACTOR"))
+        self.assertFalse(RolePermissionPolicy.can_manage_members("ACTOR"))
+
+    def test_membership_crud_and_duplicate_rejection(self):
+        url = reverse("workspacemembership-list")
+
+        # 1. Create membership
+        resp = self.client.post(
+            url,
+            {
+                "workspace": str(self.workspace.id),
+                "name": "Christopher Nolan",
+                "email": "chris@syncopy.com",
+                "role": "DIRECTOR",
+                "department": "DIRECTING",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        member_id = resp.data["id"]
+        self.assertEqual(resp.data["role"], "DIRECTOR")
+        self.assertTrue(resp.data["capabilities"]["can_edit_script"])
+        self.assertTrue(resp.data["capabilities"]["can_lock_scenes"])
+        self.assertFalse(resp.data["capabilities"]["can_edit_budget"])
+
+        # 2. Reject duplicate email in same workspace
+        dup_resp = self.client.post(
+            url,
+            {
+                "workspace": str(self.workspace.id),
+                "name": "Chris Dup",
+                "email": "chris@syncopy.com",
+                "role": "PRODUCER",
+            },
+            format="json",
+        )
+        self.assertEqual(dup_resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 3. Same email in different workspace is allowed
+        diff_ws_resp = self.client.post(
+            url,
+            {
+                "workspace": str(self.other_workspace.id),
+                "name": "Chris Nolan",
+                "email": "chris@syncopy.com",
+                "role": "OWNER",
+            },
+            format="json",
+        )
+        self.assertEqual(diff_ws_resp.status_code, status.HTTP_201_CREATED)
+
+        # 4. Filter by workspace and role
+        filter_resp = self.client.get(f"{url}?workspace={self.workspace.id}&role=DIRECTOR")
+        self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(filter_resp.data), 1)
+
+        # 5. Patch role to PRODUCER
+        detail_url = reverse("workspacemembership-detail", kwargs={"pk": member_id})
+        patch_resp = self.client.patch(detail_url, {"role": "PRODUCER"}, format="json")
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_resp.data["role"], "PRODUCER")
+        self.assertTrue(patch_resp.data["capabilities"]["can_edit_budget"])
+
+    def test_current_user_role_action(self):
+        url = reverse("workspacemembership-current-user-role")
+
+        # Create explicit member
+        WorkspaceMembership.objects.create(
+            workspace=self.workspace,
+            name="Cillian Murphy",
+            email="cillian@peaky.com",
+            role="ACTOR",
+            department="CAST",
+        )
+
+        # Fetch role by email
+        resp = self.client.get(f"{url}?workspace={self.workspace.id}&email=cillian@peaky.com")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["role"], "ACTOR")
+        self.assertFalse(resp.data["capabilities"]["can_edit_script"])
+        self.assertFalse(resp.data["capabilities"]["can_edit_budget"])
+
+        # Fetch for unknown email defaults to OWNER fallback
+        resp2 = self.client.get(f"{url}?workspace={self.workspace.id}&email=unknown@studio.com")
+        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp2.data["role"], "OWNER")
+        self.assertTrue(resp2.data["capabilities"]["can_edit_budget"])
 
 
 

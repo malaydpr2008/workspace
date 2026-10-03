@@ -1,25 +1,52 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { WorkspaceSidebar } from './tree/WorkspaceSidebar';
 import { NodeDispatcher } from './NodeDispatcher';
 import { CommandPalette } from './navigation/CommandPalette';
-import { AlertCircle, RefreshCw, X } from 'lucide-react';
+import { TeamManagementModal } from './team/TeamManagementModal';
+import { AlertCircle, RefreshCw, X, Shield, Users } from 'lucide-react';
+import { WorkspaceRole } from '@/types/workspace';
 
 interface WorkspaceShellProps {
   slug?: string;
 }
 
+const PERSPECTIVE_ROLES: { role: WorkspaceRole; label: string; icon: string; color: string }[] = [
+  { role: 'OWNER', label: 'Executive', icon: '👑', color: 'text-amber-400' },
+  { role: 'PRODUCER', label: 'Producer', icon: '💼', color: 'text-indigo-400' },
+  { role: 'DIRECTOR', label: 'Director', icon: '🎬', color: 'text-sky-400' },
+  { role: 'WRITER', label: 'Writer', icon: '✍️', color: 'text-emerald-400' },
+  { role: 'DEPT_HEAD', label: 'Dept Head', icon: '🛠️', color: 'text-violet-400' },
+  { role: 'ACTOR', label: 'Actor', icon: '🎭', color: 'text-rose-400' },
+];
+
 export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
   slug = 'production-studio',
 }) => {
-  const { loadWorkspace, error, currentWorkspace, lastError, clearLastError } =
-    useWorkspaceStore();
+  const {
+    loadWorkspace,
+    error,
+    currentWorkspace,
+    lastError,
+    clearLastError,
+    currentUserRole,
+    setCurrentUserRole,
+    loadCurrentUserRole,
+  } = useWorkspaceStore();
+
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
   useEffect(() => {
     loadWorkspace(slug);
   }, [slug, loadWorkspace]);
+
+  useEffect(() => {
+    if (currentWorkspace?.id) {
+      loadCurrentUserRole(currentWorkspace.id);
+    }
+  }, [currentWorkspace?.id, loadCurrentUserRole]);
 
   // Auto-dismiss lastError after 6 seconds
   useEffect(() => {
@@ -63,11 +90,60 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
 
       {/* Central Canvas with Polymorphic Node Dispatcher */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950">
+        {/* Top Header Bar with Role Switcher Perspective */}
+        <div className="h-9 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-4 flex items-center justify-between shrink-0 no-print z-20">
+          <div className="flex items-center space-x-2 text-xs font-mono">
+            <span className="text-slate-400 flex items-center space-x-1.5">
+              <Shield className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Role Perspective:</span>
+            </span>
+            <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+              {PERSPECTIVE_ROLES.map(({ role, label, icon, color }) => (
+                <button
+                  key={role}
+                  onClick={() => setCurrentUserRole(role)}
+                  className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono transition-all ${
+                    currentUserRole === role
+                      ? 'bg-slate-800 text-white font-bold shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title={`Preview workspace as ${label}`}
+                >
+                  <span>{icon}</span>
+                  <span className={currentUserRole === role ? color : ''}>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 text-xs font-mono">
+            <span className="text-[11px] text-slate-400">
+              Active: <strong className="text-indigo-300 font-bold">{currentUserRole}</strong>
+            </span>
+            <button
+              onClick={() => setIsTeamModalOpen(true)}
+              className="flex items-center space-x-1 px-2.5 py-1 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] transition-colors"
+              title="Manage team members and permissions"
+            >
+              <Users className="w-3 h-3" />
+              <span>Team & Roles</span>
+            </button>
+          </div>
+        </div>
+
         <NodeDispatcher />
       </main>
 
       {/* Global Universal Command Palette (CMD+K / Ctrl+K) */}
       <CommandPalette />
+
+      {/* Team Management Modal */}
+      <TeamManagementModal
+        isOpen={isTeamModalOpen}
+        onClose={() => setIsTeamModalOpen(false)}
+        workspaceId={currentWorkspace?.id || ''}
+        workspaceName={currentWorkspace?.name}
+      />
 
       {/* Non-intrusive Floating Sync Error Banner / Toast */}
       {lastError && (

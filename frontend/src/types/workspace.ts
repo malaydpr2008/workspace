@@ -317,6 +317,41 @@ export interface ProductionMilestone {
   created_at: string;
 }
 
+export type WorkspaceRole =
+  | 'OWNER'
+  | 'PRODUCER'
+  | 'DIRECTOR'
+  | 'WRITER'
+  | 'DEPT_HEAD'
+  | 'ACTOR';
+
+export interface RoleCapabilities {
+  canEditScript: boolean;
+  canEditBudget: boolean;
+  canLockScenes: boolean;
+  canManageMembers: boolean;
+}
+
+export interface WorkspaceMembership {
+  id: string;
+  workspace: string;
+  workspace_name?: string;
+  user?: number | null;
+  email: string;
+  name: string;
+  role: WorkspaceRole;
+  role_display?: string;
+  department?: string;
+  is_active: boolean;
+  capabilities?: {
+    can_edit_script: boolean;
+    can_edit_budget: boolean;
+    can_lock_scenes: boolean;
+    can_manage_members: boolean;
+  };
+  created_at: string;
+}
+
 
 
 

@@ -18,6 +18,7 @@ from core.models import (
     BudgetCategory,
     BudgetLineItem,
     ProductionMilestone,
+    WorkspaceMembership,
 )
 
 
@@ -524,6 +525,34 @@ class ProductionMilestoneSerializer(serializers.ModelSerializer):
         if "workspace" not in attrs and "screenplay" in attrs:
             attrs["workspace"] = attrs["screenplay"].workspace
         return attrs
+
+
+class WorkspaceMembershipSerializer(serializers.ModelSerializer):
+    workspace_name = serializers.CharField(source="workspace.name", read_only=True)
+    role_display = serializers.CharField(source="get_role_display", read_only=True)
+    capabilities = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkspaceMembership
+        fields = [
+            "id",
+            "workspace",
+            "workspace_name",
+            "user",
+            "email",
+            "name",
+            "role",
+            "role_display",
+            "department",
+            "is_active",
+            "capabilities",
+            "created_at",
+        ]
+        read_only_fields = ["id", "workspace_name", "role_display", "capabilities", "created_at"]
+
+    def get_capabilities(self, obj):
+        from core.permissions import RolePermissionPolicy
+        return RolePermissionPolicy.get_capabilities(obj.role)
 
 
 

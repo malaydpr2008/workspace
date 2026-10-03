@@ -18,6 +18,9 @@ import {
   BudgetCategory,
   BudgetLineItem,
   ProductionMilestone,
+  WorkspaceMembership,
+  WorkspaceRole,
+  RoleCapabilities,
 } from '@/types/workspace';
 import {
   fetchWorkspaces,
@@ -85,7 +88,54 @@ import {
   updateMilestone,
   deleteMilestone,
   initializeDefaultTimeline,
+  fetchMemberships,
+  createMembership,
+  updateMembership,
+  deleteMembership,
+  fetchCurrentUserRole,
 } from '@/lib/api';
+
+export function getRoleCapabilities(role: WorkspaceRole): RoleCapabilities {
+  switch (role) {
+    case 'OWNER':
+    case 'PRODUCER':
+      return {
+        canEditScript: true,
+        canEditBudget: true,
+        canLockScenes: true,
+        canManageMembers: true,
+      };
+    case 'DIRECTOR':
+      return {
+        canEditScript: true,
+        canEditBudget: false,
+        canLockScenes: true,
+        canManageMembers: false,
+      };
+    case 'WRITER':
+      return {
+        canEditScript: true,
+        canEditBudget: false,
+        canLockScenes: false,
+        canManageMembers: false,
+      };
+    case 'DEPT_HEAD':
+    case 'ACTOR':
+      return {
+        canEditScript: false,
+        canEditBudget: false,
+        canLockScenes: false,
+        canManageMembers: false,
+      };
+    default:
+      return {
+        canEditScript: true,
+        canEditBudget: true,
+        canLockScenes: true,
+        canManageMembers: true,
+      };
+  }
+}
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -264,6 +314,20 @@ interface WorkspaceState {
   updateMilestoneItem: (id: string, data: Partial<ProductionMilestone>) => Promise<ProductionMilestone | null>;
   deleteMilestoneItem: (id: string) => Promise<void>;
   initDefaultTimeline: (screenplayId: string, workspaceId?: string) => Promise<ProductionMilestone[]>;
+  memberships: WorkspaceMembership[];
+  currentUserRole: WorkspaceRole;
+  currentCapabilities: RoleCapabilities;
+  loadMemberships: (workspaceId: string) => Promise<WorkspaceMembership[]>;
+  createMemberItem: (
+    data: Partial<WorkspaceMembership> & { workspace: string; email: string; name: string }
+  ) => Promise<WorkspaceMembership | null>;
+  updateMemberItem: (
+    id: string,
+    data: Partial<WorkspaceMembership>
+  ) => Promise<WorkspaceMembership | null>;
+  deleteMemberItem: (id: string) => Promise<void>;
+  setCurrentUserRole: (role: WorkspaceRole) => void;
+  loadCurrentUserRole: (workspaceId: string, email?: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -288,6 +352,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   budgets: [],
   activeBudgetId: null,
   milestones: [],
+  memberships: [],
+  currentUserRole: 'OWNER',
+  currentCapabilities: {
+    canEditScript: true,
+    canEditBudget: true,
+    canLockScenes: true,
+    canManageMembers: true,
+  },
   isLoading: false,
   saveStatus: 'idle',
   error: null,
@@ -1810,6 +1882,73 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch (err) {
       console.error('Failed to initialize default timeline', err);
       return [];
+    }
+  },
+
+  loadMemberships: async (workspaceId: string) => {
+    try {
+      const memberships = await fetchMemberships(workspaceId);
+      set({ memberships });
+      return memberships;
+    } catch (err) {
+      console.error('Failed to load memberships', err);
+      return [];
+    }
+  },
+
+  createMemberItem: async (data) => {
+    try {
+      const created = await createMembership(data);
+      set((state) => ({
+        memberships: [...state.memberships, created],
+      }));
+      return created;
+    } catch (err) {
+      console.error('Failed to create membership', err);
+      return null;
+    }
+  },
+
+  updateMemberItem: async (id, data) => {
+    try {
+      const updated = await updateMembership(id, data);
+      set((state) => ({
+        memberships: state.memberships.map((m) => (m.id === id ? updated : m)),
+      }));
+      return updated;
+    } catch (err) {
+      console.error('Failed to update membership', err);
+      return null;
+    }
+  },
+
+  deleteMemberItem: async (id) => {
+    try {
+      await deleteMembership(id);
+      set((state) => ({
+        memberships: state.memberships.filter((m) => m.id !== id),
+      }));
+    } catch (err) {
+      console.error('Failed to delete membership', err);
+    }
+  },
+
+  setCurrentUserRole: (role: WorkspaceRole) => {
+    set({
+      currentUserRole: role,
+      currentCapabilities: getRoleCapabilities(role),
+    });
+  },
+
+  loadCurrentUserRole: async (workspaceId: string, email?: string) => {
+    try {
+      const result = await fetchCurrentUserRole(workspaceId, email);
+      set({
+        currentUserRole: result.role,
+        currentCapabilities: result.capabilities,
+      });
+    } catch (err) {
+      console.error('Failed to load current user role', err);
     }
   },
 }));

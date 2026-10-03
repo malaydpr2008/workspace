@@ -15,6 +15,7 @@ import {
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { TreeNodeItem } from './TreeNodeItem';
 import { NodeType } from '@/types/workspace';
+import { TeamManagementModal } from '@/components/team/TeamManagementModal';
 
 export const WorkspaceSidebar: React.FC = () => {
   const {
@@ -24,6 +25,8 @@ export const WorkspaceSidebar: React.FC = () => {
     createNewNode,
     isLoading,
   } = useWorkspaceStore();
+
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -207,11 +210,35 @@ export const WorkspaceSidebar: React.FC = () => {
         )}
       </div>
 
+      {/* Team & Role Management Action */}
+      <div className="p-2 border-t border-slate-800/60 bg-slate-950/40">
+        <button
+          onClick={() => setIsTeamModalOpen(true)}
+          className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-900/60 hover:bg-slate-800/80 text-slate-300 hover:text-white border border-slate-800/80 text-xs font-mono transition-all group shadow-sm"
+        >
+          <div className="flex items-center space-x-2">
+            <Users className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-300" />
+            <span>Team & Roles</span>
+          </div>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+            RBAC
+          </span>
+        </button>
+      </div>
+
       {/* Footer System Meta */}
       <div className="p-3 border-t border-slate-800/60 bg-slate-950/60 text-[11px] text-slate-500 flex items-center justify-between">
         <span>Deterministic LexoRank $O(1)$</span>
         <span className="font-mono text-cyan-400/80">DRF v5.2</span>
       </div>
+
+      {/* Team Management & RBAC Modal */}
+      <TeamManagementModal
+        isOpen={isTeamModalOpen}
+        onClose={() => setIsTeamModalOpen(false)}
+        workspaceId={currentWorkspace?.id || ''}
+        workspaceName={currentWorkspace?.name}
+      />
     </aside>
   );
 };

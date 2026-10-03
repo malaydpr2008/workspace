@@ -16,6 +16,9 @@ import {
   BudgetCategory,
   BudgetLineItem,
   ProductionMilestone,
+  WorkspaceMembership,
+  WorkspaceRole,
+  RoleCapabilities,
 } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -820,6 +823,85 @@ export async function initializeDefaultTimeline(data: {
     body: JSON.stringify(data),
   });
   return handleResponse<ProductionMilestone[]>(res);
+}
+
+export async function fetchMemberships(
+  workspaceId: string,
+  role?: string
+): Promise<WorkspaceMembership[]> {
+  const url = new URL(`${API_BASE_URL}/memberships/`);
+  url.searchParams.set('workspace', workspaceId);
+  if (role) url.searchParams.set('role', role);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<WorkspaceMembership[]>(res);
+}
+
+export async function createMembership(
+  data: Partial<WorkspaceMembership> & { workspace: string; email: string; name: string }
+): Promise<WorkspaceMembership> {
+  const res = await fetch(`${API_BASE_URL}/memberships/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<WorkspaceMembership>(res);
+}
+
+export async function updateMembership(
+  id: string,
+  data: Partial<WorkspaceMembership>
+): Promise<WorkspaceMembership> {
+  const res = await fetch(`${API_BASE_URL}/memberships/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<WorkspaceMembership>(res);
+}
+
+export async function deleteMembership(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/memberships/${id}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete membership failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function fetchCurrentUserRole(
+  workspaceId: string,
+  email?: string
+): Promise<{
+  role: WorkspaceRole;
+  capabilities: RoleCapabilities;
+  membership?: WorkspaceMembership | null;
+}> {
+  const url = new URL(`${API_BASE_URL}/memberships/current_user_role/`);
+  url.searchParams.set('workspace', workspaceId);
+  if (email) url.searchParams.set('email', email);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  const raw = await handleResponse<{
+    role: WorkspaceRole;
+    capabilities: {
+      can_edit_script: boolean;
+      can_edit_budget: boolean;
+      can_lock_scenes: boolean;
+      can_manage_members: boolean;
+    };
+    membership?: WorkspaceMembership | null;
+  }>(res);
+
+  return {
+    role: raw.role,
+    capabilities: {
+      canEditScript: Boolean(raw.capabilities?.can_edit_script),
+      canEditBudget: Boolean(raw.capabilities?.can_edit_budget),
+      canLockScenes: Boolean(raw.capabilities?.can_lock_scenes),
+      canManageMembers: Boolean(raw.capabilities?.can_manage_members),
+    },
+    membership: raw.membership,
+  };
 }
 
 
