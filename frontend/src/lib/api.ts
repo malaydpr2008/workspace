@@ -31,10 +31,39 @@ const API_BASE_URL =
   (typeof window !== 'undefined' ? '/api' : 'http://localhost:8000/api');
 
 async function handleResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
   if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`API request failed [${response.status}]: ${errorBody}`);
+    let cleanMessage = `API request failed [${response.status}]`;
+    if (isJson) {
+      try {
+        const errorJson = await response.json();
+        cleanMessage =
+          errorJson.detail ||
+          errorJson.error ||
+          errorJson.message ||
+          (typeof errorJson === 'string' ? errorJson : JSON.stringify(errorJson));
+      } catch {
+        cleanMessage = `API request failed [${response.status}]: ${response.statusText}`;
+      }
+    } else {
+      const text = await response.text();
+      if (response.status === 404 || text.includes('404')) {
+        cleanMessage = 'Backend endpoint not found (404). Verify API route and service health.';
+      } else if (text.trim().startsWith('<') || text.includes('{"children":')) {
+        cleanMessage = `Server returned invalid response (${response.status}).`;
+      } else if (text.trim().length > 0 && text.trim().length < 200) {
+        cleanMessage = text.trim();
+      }
+    }
+    throw new Error(cleanMessage);
   }
+
+  if (!isJson) {
+    throw new Error('Expected JSON response from backend, but received non-JSON payload.');
+  }
+
   return response.json();
 }
 

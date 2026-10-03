@@ -144,6 +144,19 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
   }, [lastError, clearLastError]);
 
   if (error && !currentWorkspace) {
+    const displayError = (() => {
+      if (!error) return 'Unable to connect to studio workspace.';
+      if (
+        error.includes('{"children":') ||
+        error.includes('<!DOCTYPE') ||
+        error.includes('<html') ||
+        error.includes('This page could not be found')
+      ) {
+        return 'Backend endpoint unreachable or returned an invalid page (404).';
+      }
+      return error;
+    })();
+
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-slate-200 p-6">
         <div className="max-w-md w-full p-6 rounded-2xl bg-slate-900 border border-rose-500/30 text-center space-y-4 shadow-2xl">
@@ -151,7 +164,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
             <AlertCircle className="w-6 h-6" />
           </div>
           <h2 className="text-lg font-bold text-white">Connection Error</h2>
-          <p className="text-xs text-slate-400">{error}</p>
+          <p className="text-xs text-slate-400">{displayError}</p>
           <p className="text-[11px] text-slate-500">
             Make sure the Django backend is running at{' '}
             <code className="text-cyan-400 font-mono">http://localhost:8000</code> and seeded.

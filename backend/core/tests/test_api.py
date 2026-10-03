@@ -1230,6 +1230,14 @@ class RedisChannelLayerConfigurationTests(APITestCase):
         ])
 
 
+class RootHealthCheckTests(APITestCase):
+    def test_root_health_check_returns_200(self):
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.json(), {"status": "ok", "service": "backend", "ready": True})
+
+
+
 
 
 
