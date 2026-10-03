@@ -47,8 +47,9 @@ export function createWorkspaceSocket(
       return `${envWs.replace(/\/$/, '')}/ws/workspace/${workspaceId}/`;
     }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Django / Daphne default is localhost:8000
-    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+    // In standalone local dev on port 3000, fallback to direct Daphne port 8000.
+    // Otherwise use window.location.host so Nginx gateway routes /ws/ to Daphne.
+    const host = window.location.port === '3000' ? 'localhost:8000' : window.location.host;
     return `${protocol}//${host}/ws/workspace/${workspaceId}/`;
   }
 

@@ -1215,5 +1215,21 @@ class StudioAIEngineAndCoverageAPITests(APITestCase):
         )
 
 
+class RedisChannelLayerConfigurationTests(APITestCase):
+    def test_channels_redis_imported_and_configured(self):
+        import channels_redis.core
+        self.assertIsNotNone(channels_redis.core.RedisChannelLayer)
+
+        # Test settings resolution with REDIS_URL
+        from django.conf import settings
+        self.assertIn("default", settings.CHANNEL_LAYERS)
+        backend_class = settings.CHANNEL_LAYERS["default"]["BACKEND"]
+        self.assertIn(backend_class, [
+            "channels.layers.InMemoryChannelLayer",
+            "channels_redis.core.RedisChannelLayer"
+        ])
+
+
+
 
 
