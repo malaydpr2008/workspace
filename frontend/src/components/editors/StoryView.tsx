@@ -19,8 +19,8 @@ import {
   Download,
   AlertCircle,
 } from 'lucide-react';
-import { WorkspaceEntity, WorkspaceNode } from '@/types/workspace';
-import { useGraphStore, useWorkspaceStore } from '@/lib/workspaceStore';
+import { WorkspaceNode } from '@/types/workspace';
+import { useWorkspaceStore } from '@/lib/workspaceStore';
 
 export interface StoryViewProps {
   node?: WorkspaceNode;
@@ -28,11 +28,13 @@ export interface StoryViewProps {
 
 export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
   const {
-    workspaceId,
     entities,
     nodes,
     updateEntity,
     focusNodeOnGraph,
+    addStoryEntity,
+    linkEntityToCanvas,
+    deleteEntity,
     syncStatus,
     isSyncing,
     lastSyncedAt,
@@ -55,64 +57,6 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
 
   const readingTimeMin = Math.max(1, Math.ceil(wordCount / 200));
 
-  const handleAddEntity = (entityType: WorkspaceEntity['entityType'] = 'action') => {
-    const wsId = workspaceId || 'production-studio';
-    const newId =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `ent-${Date.now()}`;
-    const maxOrder =
-      sortedEntities.length > 0
-        ? Math.max(...sortedEntities.map((e) => e.orderIndex))
-        : -1;
-
-    let defaultTitle = '';
-    let defaultContent = '';
-
-    if (entityType === 'scene_heading') {
-      defaultTitle = 'INT. NEW SCENE - DAY';
-      defaultContent = 'INT. NEW SCENE - DAY';
-    } else if (entityType === 'dialogue') {
-      defaultTitle = 'CHARACTER';
-      defaultContent = 'Type new spoken line here...';
-    } else if (entityType === 'action') {
-      defaultContent = 'Describe the action taking place on screen...';
-    } else if (entityType === 'note') {
-      defaultTitle = 'Production Note';
-      defaultContent = 'Add directorial note or context...';
-    }
-
-    const newEntity: WorkspaceEntity = {
-      id: newId,
-      workspaceId: wsId,
-      entityType,
-      title: defaultTitle,
-      content: defaultContent,
-      orderIndex: maxOrder + 1,
-      metadata: {},
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    useGraphStore.setState((state) => ({
-      entities: [...state.entities, newEntity],
-    }));
-    useGraphStore.getState().debouncedSyncEntities();
-  };
-
-  const handleDeleteEntity = (id: string) => {
-    useGraphStore.setState((state) => ({
-      entities: state.entities.filter((e) => e.id !== id),
-      nodes: state.nodes.map((n) =>
-        n.data?.entityId === id
-          ? { ...n, data: { ...n.data, entityId: null, entityType: null } }
-          : n
-      ),
-    }));
-    useGraphStore.getState().debouncedSyncEntities();
-    useGraphStore.getState().debouncedSyncGraph();
-  };
-
   const handleMoveEntity = (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= sortedEntities.length) return;
@@ -127,8 +71,8 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
       orderIndex: idx,
     }));
 
-    useGraphStore.setState({ entities: updatedList });
-    useGraphStore.getState().debouncedSyncEntities();
+    useWorkspaceStore.setState({ entities: updatedList });
+    useWorkspaceStore.getState().debouncedSyncEntities();
   };
 
   const handleExportMarkdown = () => {
@@ -256,25 +200,25 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
             </span>
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => handleAddEntity('scene_heading')}
+                onClick={() => addStoryEntity('scene_heading')}
                 className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-amber-950/40 hover:text-amber-300 hover:border-amber-500/40 border border-slate-700/60 text-[11px] font-mono text-slate-300 transition-colors"
               >
                 + Scene Heading
               </button>
               <button
-                onClick={() => handleAddEntity('action')}
+                onClick={() => addStoryEntity('action')}
                 className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-emerald-950/40 hover:text-emerald-300 hover:border-emerald-500/40 border border-slate-700/60 text-[11px] font-mono text-slate-300 transition-colors"
               >
                 + Action
               </button>
               <button
-                onClick={() => handleAddEntity('dialogue')}
+                onClick={() => addStoryEntity('dialogue')}
                 className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-indigo-950/40 hover:text-indigo-300 hover:border-indigo-500/40 border border-slate-700/60 text-[11px] font-mono text-slate-300 transition-colors"
               >
                 + Dialogue
               </button>
               <button
-                onClick={() => handleAddEntity('note')}
+                onClick={() => addStoryEntity('note')}
                 className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-purple-950/40 hover:text-purple-300 hover:border-purple-500/40 border border-slate-700/60 text-[11px] font-mono text-slate-300 transition-colors"
               >
                 + Note
@@ -294,7 +238,7 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
               </div>
               <div className="flex justify-center space-x-3 pt-2">
                 <button
-                  onClick={() => handleAddEntity('scene_heading')}
+                  onClick={() => addStoryEntity('scene_heading')}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg transition-all flex items-center space-x-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -356,16 +300,21 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
                           #{entity.orderIndex}
                         </span>
 
-                        {/* Linked Node Badge */}
+                        {/* Linked Node Badge / Interactive + Place on Canvas Button */}
                         {linkedNode ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-950/60 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                             <span>Canvas Node: {linkedNode.data?.title || linkedNode.id.slice(0, 8)}</span>
                           </span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-500 border border-slate-800">
-                            Unlinked Card
-                          </span>
+                          <button
+                            onClick={() => linkEntityToCanvas(entity.id)}
+                            className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center space-x-1 transition-all"
+                            title="Place this entity as an interactive card on the Visual Graph Canvas"
+                          >
+                            <Plus className="w-3 h-3 text-amber-400" />
+                            <span>+ Place on Canvas</span>
+                          </button>
                         )}
                       </div>
 
@@ -401,7 +350,7 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
 
                         {/* Delete Button */}
                         <button
-                          onClick={() => handleDeleteEntity(entity.id)}
+                          onClick={() => deleteEntity(entity.id)}
                           className="p-1 rounded bg-slate-800 hover:bg-rose-950/60 hover:text-rose-400 text-slate-500 transition-colors"
                           title="Delete entity"
                         >
@@ -504,7 +453,7 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
                 <span>End of Manuscript Continuum</span>
               </span>
               <button
-                onClick={() => handleAddEntity('dialogue')}
+                onClick={() => addStoryEntity('dialogue')}
                 className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-indigo-300 hover:text-indigo-200 transition-colors"
               >
                 <Plus className="w-3 h-3" />

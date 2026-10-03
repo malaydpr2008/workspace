@@ -184,19 +184,59 @@ class Command(BaseCommand):
         )
         self.stdout.write("Created Model C canonical entities (scene_heading, action, dialogue)")
 
-        # 8. Infinite Visual Graph: Input (Linked to Entity 3) -> Transform -> Output
-        node_input = Node.objects.create(
+        # 8. Infinite Visual Graph: Symmetrical 1:1 Story Entities + AI Pipeline Tools
+        node_heading = Node.objects.create(
+            workspace=workspace,
+            entity=entity_heading,
+            type="scene_heading",
+            title="Scene Heading",
+            category="input",
+            position_x=80.0,
+            position_y=150.0,
+            data={
+                "entityId": str(entity_heading.id),
+                "entityType": entity_heading.entity_type,
+                "label": "Scene Heading",
+                "title": entity_heading.title,
+                "content": entity_heading.content,
+                "text": entity_heading.content,
+                "inputs": [],
+                "outputs": [{"id": "out-scene", "name": "Scene Context", "type": "string"}],
+            },
+        )
+
+        node_action = Node.objects.create(
+            workspace=workspace,
+            entity=entity_action,
+            type="action",
+            title="Action Description",
+            category="input",
+            position_x=80.0,
+            position_y=350.0,
+            data={
+                "entityId": str(entity_action.id),
+                "entityType": entity_action.entity_type,
+                "label": "Action Description",
+                "title": entity_action.title,
+                "content": entity_action.content,
+                "text": entity_action.content,
+                "inputs": [{"id": "in-action", "name": "Previous Flow", "type": "string"}],
+                "outputs": [{"id": "out-action", "name": "Next Flow", "type": "string"}],
+            },
+        )
+
+        node_dialogue = Node.objects.create(
             workspace=workspace,
             entity=entity_dialogue,
-            type="universalNode",
-            title="Screenplay Input",
+            type="dialogue",
+            title="ELENA",
             category="input",
-            position_x=100.0,
-            position_y=160.0,
+            position_x=80.0,
+            position_y=550.0,
             data={
                 "entityId": str(entity_dialogue.id),
                 "entityType": entity_dialogue.entity_type,
-                "label": "Scene Dialogue",
+                "label": "Character Dialogue",
                 "title": entity_dialogue.title,
                 "content": entity_dialogue.content,
                 "text": entity_dialogue.content,
@@ -209,11 +249,11 @@ class Command(BaseCommand):
         node_transform = Node.objects.create(
             workspace=workspace,
             entity=None,
-            type="universalNode",
+            type="ai_transform",
             title="Dialogue Doctor AI",
             category="transform",
             position_x=520.0,
-            position_y=160.0,
+            position_y=550.0,
             data={
                 "model": "gpt-4o-cinematic",
                 "temperature": 0.7,
@@ -226,11 +266,11 @@ class Command(BaseCommand):
         node_output = Node.objects.create(
             workspace=workspace,
             entity=None,
-            type="universalNode",
+            type="output",
             title="Production Storyboard",
             category="output",
-            position_x=940.0,
-            position_y=160.0,
+            position_x=950.0,
+            position_y=550.0,
             data={
                 "aspectRatio": "16:9 Anamorphic",
                 "resolution": "4K Ultra-HD",
@@ -241,9 +281,9 @@ class Command(BaseCommand):
         )
 
         edge1 = Edge.objects.create(
-            id=f"xy-edge__{node_input.id}out-text-{node_transform.id}in-text",
+            id=f"xy-edge__{node_dialogue.id}out-text-{node_transform.id}in-text",
             workspace=workspace,
-            source=node_input,
+            source=node_dialogue,
             target=node_transform,
             source_handle="out-text",
             target_handle="in-text",
@@ -258,7 +298,9 @@ class Command(BaseCommand):
             target_handle="in-processed",
         )
 
-        self.stdout.write(f"Created Graph nodes: {node_input.title} (Linked to {entity_dialogue.id}) -> {node_transform.title} -> {node_output.title}")
+        self.stdout.write(
+            f"Created 5 Graph nodes: {node_heading.title}, {node_action.title}, {node_dialogue.title} -> {node_transform.title} -> {node_output.title}"
+        )
         self.stdout.write(f"Created Graph edges: {edge1.id}, {edge2.id}")
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded workspace database."))

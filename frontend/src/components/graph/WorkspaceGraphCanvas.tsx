@@ -27,6 +27,9 @@ import {
   MonitorPlay,
   Sliders,
   ChevronDown,
+  Clapperboard,
+  MessageSquare,
+  Sparkles,
 } from 'lucide-react';
 
 const defaultEdgeOptions: DefaultEdgeOptions = {
@@ -61,52 +64,93 @@ function GraphToolbar({ onAddNode }: { onAddNode: (category: string) => void }) 
         </button>
 
         {isMenuOpen && (
-          <div className="absolute top-full left-0 mt-1.5 w-60 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md p-1.5 text-xs text-slate-200 z-50 flex flex-col space-y-1 animate-in fade-in slide-in-from-top-2 duration-150 font-sans">
-            <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 border-b border-slate-800">
-              Select Node Type
+          <div className="absolute top-full left-0 mt-1.5 w-72 rounded-xl bg-slate-900/98 border border-slate-700/80 shadow-2xl backdrop-blur-md p-1.5 text-xs text-slate-200 z-50 flex flex-col space-y-1 animate-in fade-in slide-in-from-top-2 duration-150 font-sans">
+            {/* Section 1: STORY ENTITIES */}
+            <div className="px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 border-b border-slate-800 flex items-center justify-between">
+              <span>Story Entities (Document Sync)</span>
+              <span className="text-[9px] text-slate-500 font-normal">Model C</span>
             </div>
 
             <button
-              onClick={() => handleSelectCategory('input')}
-              className="flex items-center space-x-2.5 px-2.5 py-2 rounded-lg hover:bg-emerald-950/50 hover:text-emerald-300 text-left transition-colors border border-transparent hover:border-emerald-500/30"
+              onClick={() => handleSelectCategory('scene_heading')}
+              className="flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg hover:bg-amber-950/40 hover:text-amber-200 text-left transition-colors border border-transparent hover:border-amber-500/30"
+            >
+              <Clapperboard className="w-4 h-4 text-amber-400 shrink-0" />
+              <div>
+                <div className="font-semibold text-amber-300">Scene Heading Node</div>
+                <div className="text-[10px] text-slate-400">Slugline, location, INT/EXT anchor</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleSelectCategory('action')}
+              className="flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg hover:bg-emerald-950/40 hover:text-emerald-200 text-left transition-colors border border-transparent hover:border-emerald-500/30"
             >
               <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
               <div>
-                <div className="font-semibold text-emerald-300">Input Node</div>
-                <div className="text-[10px] text-slate-400">Screenplay, raw stream, or prompt input</div>
+                <div className="font-semibold text-emerald-300">Action Description Node</div>
+                <div className="text-[10px] text-slate-400">Sequential prose and visual beats</div>
               </div>
             </button>
 
             <button
-              onClick={() => handleSelectCategory('transform')}
-              className="flex items-center space-x-2.5 px-2.5 py-2 rounded-lg hover:bg-purple-950/50 hover:text-purple-300 text-left transition-colors border border-transparent hover:border-purple-500/30"
+              onClick={() => handleSelectCategory('dialogue')}
+              className="flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg hover:bg-cyan-950/40 hover:text-cyan-200 text-left transition-colors border border-transparent hover:border-cyan-500/30"
+            >
+              <MessageSquare className="w-4 h-4 text-cyan-400 shrink-0" />
+              <div>
+                <div className="font-semibold text-cyan-300">Character Dialogue Node</div>
+                <div className="text-[10px] text-slate-400">Speaker lines with stream handles</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleSelectCategory('note')}
+              className="flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg hover:bg-yellow-950/40 hover:text-yellow-200 text-left transition-colors border border-transparent hover:border-yellow-500/30"
+            >
+              <Sparkles className="w-4 h-4 text-yellow-400 shrink-0" />
+              <div>
+                <div className="font-semibold text-yellow-300">Sticky Note Node</div>
+                <div className="text-[10px] text-slate-400">Director memo or unrouted note</div>
+              </div>
+            </button>
+
+            {/* Section 2: AI & PIPELINE TOOLS */}
+            <div className="mt-1 px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400 border-t border-b border-slate-800 flex items-center justify-between">
+              <span>AI & Pipeline Tools (DAG)</span>
+              <span className="text-[9px] text-slate-500 font-normal">Operational</span>
+            </div>
+
+            <button
+              onClick={() => handleSelectCategory('dialogue_doctor')}
+              className="flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg hover:bg-purple-950/40 hover:text-purple-200 text-left transition-colors border border-transparent hover:border-purple-500/30"
             >
               <Cpu className="w-4 h-4 text-purple-400 shrink-0" />
               <div>
-                <div className="font-semibold text-purple-300">Transform Node</div>
-                <div className="text-[10px] text-slate-400">AI Story Copilot, Dialogue Doctor, LLM</div>
+                <div className="font-semibold text-purple-300">Dialogue Doctor AI (LLM)</div>
+                <div className="text-[10px] text-slate-400">Context-aware subtext & punch-up</div>
               </div>
             </button>
 
             <button
-              onClick={() => handleSelectCategory('output')}
-              className="flex items-center space-x-2.5 px-2.5 py-2 rounded-lg hover:bg-sky-950/50 hover:text-sky-300 text-left transition-colors border border-transparent hover:border-sky-500/30"
+              onClick={() => handleSelectCategory('storyboard_gen')}
+              className="flex items-center space-x-2.5 px-2.5 py-2 rounded-lg hover:bg-sky-950/40 hover:text-sky-200 text-left transition-colors border border-transparent hover:border-sky-500/30"
             >
               <MonitorPlay className="w-4 h-4 text-sky-400 shrink-0" />
               <div>
-                <div className="font-semibold text-sky-300">Output Node</div>
-                <div className="text-[10px] text-slate-400">Production Storyboard & Render specs</div>
+                <div className="font-semibold text-sky-300">Storyboard Generator (Diffusion)</div>
+                <div className="text-[10px] text-slate-400">Cinematic aspect & render passes</div>
               </div>
             </button>
 
             <button
-              onClick={() => handleSelectCategory('default')}
-              className="flex items-center space-x-2.5 px-2.5 py-2 rounded-lg hover:bg-slate-800 text-left transition-colors border border-transparent hover:border-slate-600"
+              onClick={() => handleSelectCategory('custom_transform')}
+              className="flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-left transition-colors border border-transparent hover:border-slate-600"
             >
               <Sliders className="w-4 h-4 text-indigo-400 shrink-0" />
               <div>
-                <div className="font-semibold text-slate-200">Universal Node</div>
-                <div className="text-[10px] text-slate-400">Custom metadata & pipeline pass-through</div>
+                <div className="font-semibold text-slate-200">Custom Transformer Node</div>
+                <div className="text-[10px] text-slate-400">Custom prompt & operational DAG pass</div>
               </div>
             </button>
           </div>
@@ -183,14 +227,28 @@ function InnerGraphCanvas() {
     onEdgesChange,
     onConnect,
     onViewportChange,
-    addNode,
+    addCanvasNode,
     focusedNodeId,
     setFocusedNodeId,
   } = useGraphStore();
   const { screenToFlowPosition, setViewport, setCenter } = useReactFlow();
   const hasRestoredViewport = useRef(false);
 
-  const nodeTypes = useMemo(() => ({ universalNode: UniversalNode }), []);
+  const nodeTypes = useMemo(
+    () => ({
+      universalNode: UniversalNode,
+      scene_heading: UniversalNode,
+      action: UniversalNode,
+      dialogue: UniversalNode,
+      note: UniversalNode,
+      ai_transform: UniversalNode,
+      dialogue_doctor: UniversalNode,
+      storyboard_gen: UniversalNode,
+      custom_transform: UniversalNode,
+      output: UniversalNode,
+    }),
+    []
+  );
 
   // Restore persisted viewport from Django on load
   useEffect(() => {
@@ -212,18 +270,18 @@ function InnerGraphCanvas() {
   }, [focusedNodeId, nodes, setCenter, setFocusedNodeId]);
 
   const handleAddNodeFromCenter = useCallback(
-    (category: string) => {
-      const centerX = window.innerWidth ? window.innerWidth / 2 : 400;
-      const centerY = window.innerHeight ? window.innerHeight / 2 : 300;
+    (nodeType: string) => {
+      const centerX = typeof window !== 'undefined' ? window.innerWidth / 2 : 400;
+      const centerY = typeof window !== 'undefined' ? window.innerHeight / 2 : 300;
       let flowPos = { x: 300, y: 200 };
       try {
         flowPos = screenToFlowPosition({ x: centerX, y: centerY });
       } catch {
         // Fallback if not available
       }
-      addNode(category, flowPos);
+      addCanvasNode(nodeType, flowPos);
     },
-    [addNode, screenToFlowPosition]
+    [addCanvasNode, screenToFlowPosition]
   );
 
   const handleMoveEnd = useCallback(
@@ -261,10 +319,13 @@ function InnerGraphCanvas() {
           pannable
           className="!bg-slate-900/90 !border !border-slate-800 !rounded-xl !shadow-2xl overflow-hidden"
           nodeColor={(n) => {
-            const cat = n.data?.category;
-            if (cat === 'input') return '#10b981';
-            if (cat === 'transform') return '#a855f7';
-            if (cat === 'output') return '#0ea5e9';
+            const type = (n.data?.entityType as string) || n.type || (n.data?.category as string);
+            if (type === 'scene_heading') return '#f59e0b';
+            if (type === 'action') return '#10b981';
+            if (type === 'dialogue') return '#06b6d4';
+            if (type === 'note') return '#eab308';
+            if (type === 'transform' || type === 'ai_transform' || type === 'dialogue_doctor') return '#a855f7';
+            if (type === 'output' || type === 'storyboard_gen') return '#0ea5e9';
             return '#6366f1';
           }}
           maskColor="rgba(15, 23, 42, 0.7)"

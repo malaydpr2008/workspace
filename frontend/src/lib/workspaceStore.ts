@@ -69,6 +69,15 @@ export interface GraphStoreState {
   syncEntities: (workspaceId?: string) => Promise<void>;
   debouncedSyncEntities: (workspaceId?: string) => void;
 
+  addStoryEntity: (
+    type: WorkspaceEntity['entityType'],
+    initialContent?: string,
+    title?: string,
+    position?: { x: number; y: number }
+  ) => Promise<{ entity: WorkspaceEntity; node: FlowNode }>;
+  addCanvasNode: (type: string, position?: { x: number; y: number }) => Promise<FlowNode | null>;
+  linkEntityToCanvas: (entityId: string, position?: { x: number; y: number }) => Promise<void>;
+  deleteEntity: (entityId: string) => Promise<void>;
   addNode: (categoryOrData?: string | Partial<FlowNode>, position?: { x: number; y: number }) => Promise<FlowNode | null>;
   deleteNode: (nodeId: string) => Promise<void>;
   deleteEdge: (edgeId: string) => Promise<void>;
@@ -292,18 +301,23 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
         const entityId = bn.entity || bn.entity_id || bn.data?.entityId || null;
         const linkedEntity = entityId ? canonicalEntities.find((e) => e.id === entityId) : null;
 
+        const entityType = linkedEntity?.entityType || bn.entity_type || bn.data?.entityType || null;
+        const nodeType = bn.type || entityType || 'universalNode';
+
         return {
           id: String(bn.id),
-          type: bn.type || 'universalNode',
+          type: nodeType,
           position: { x: posX, y: posY },
           data: {
             title: linkedEntity?.title || bn.title || 'Untitled Node',
             category: bn.category || 'default',
             entityId,
-            entityType: linkedEntity?.entityType || bn.entity_type || bn.data?.entityType || null,
+            entityType,
             content: linkedEntity?.content || bn.data?.content || bn.data?.text || '',
             text: linkedEntity?.content || bn.data?.text || bn.data?.content || '',
             is_collapsed: Boolean(bn.is_collapsed),
+            inputs: bn.data?.inputs || [],
+            outputs: bn.data?.outputs || [],
             ...(bn.data || {}),
           },
         };
@@ -416,59 +430,178 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
     }
   },
 
-  addNode: async (categoryOrData = 'default', position) => {
-    const wsId = get().workspaceId;
-    const isCategoryString = typeof categoryOrData === 'string';
-    const category = isCategoryString ? categoryOrData : categoryOrData.data?.category || 'default';
-    const defaultPos = position || {
-      x: 100 + Math.random() * 200,
-      y: 100 + Math.random() * 200,
+  addStoryEntity: async (type, initialContent, title, position) => {
+    const wsId = get().workspaceId || 'production-studio';
+    const currentEntities = get().entities;
+    const currentNodes = get().nodes;
+
+    const newOrder =
+      currentEntities.length > 0
+        ? Math.max(...currentEntities.map((e) => e.orderIndex)) + 1
+        : 0;
+
+    const entityId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `ent_${Date.now()}`;
+    const nodeId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `node_${Date.now()}`;
+
+    let defaultTitle = title ?? '';
+    let defaultContent = initialContent ?? '';
+
+    if (type === 'scene_heading') {
+      defaultTitle = defaultTitle || 'INT. NEW SCENE - DAY';
+      defaultContent = defaultContent || 'INT. NEW SCENE - DAY';
+    } else if (type === 'dialogue') {
+      defaultTitle = defaultTitle || 'CHARACTER';
+      defaultContent = defaultContent || 'Enter dialogue line...';
+    } else if (type === 'action') {
+      defaultTitle = defaultTitle || 'Action Description';
+      defaultContent = defaultContent || 'Describe action or visual beat...';
+    } else if (type === 'note') {
+      defaultTitle = defaultTitle || 'Production Note';
+      defaultContent = defaultContent || 'Note details...';
+    }
+
+    const newEntity: WorkspaceEntity = {
+      id: entityId,
+      workspaceId: wsId,
+      entityType: type,
+      title: defaultTitle,
+      content: defaultContent,
+      orderIndex: newOrder,
+      metadata: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    let title = 'Untitled Node';
+    // Calculate position: offset downwards from existing story nodes if not specified
+    const pos =
+      position || {
+        x: 80,
+        y: Math.max(150, currentNodes.filter((n) => Boolean(n.data?.entityId)).length * 200 + 150),
+      };
+
     let inputs: Array<{ id: string; name: string; type?: string }> = [];
     let outputs: Array<{ id: string; name: string; type?: string }> = [];
-    let initialData: Record<string, unknown> = {};
 
-    if (category === 'input') {
-      title = 'Script Input';
+    if (type === 'scene_heading') {
+      outputs = [{ id: 'out-scene', name: 'Scene Context', type: 'string' }];
+    } else if (type === 'action') {
+      inputs = [{ id: 'in-action', name: 'Prev Flow', type: 'string' }];
+      outputs = [{ id: 'out-action', name: 'Next Flow', type: 'string' }];
+    } else if (type === 'dialogue') {
+      inputs = [{ id: 'in-dialogue', name: 'Dialogue In', type: 'string' }];
       outputs = [{ id: 'out-text', name: 'Text Stream', type: 'string' }];
-      initialData = { text: 'EXT. NEW SCENE - DAY\nEnter scene action or dialogue...' };
-    } else if (category === 'transform') {
-      title = 'Story Transformer';
+    } else if (type === 'note') {
+      inputs = [];
+      outputs = [];
+    }
+
+    const newNode: FlowNode = {
+      id: nodeId,
+      type: type,
+      position: pos,
+      data: {
+        entityId: entityId,
+        entityType: type,
+        title: defaultTitle,
+        content: defaultContent,
+        text: defaultContent,
+        category: 'input',
+        is_collapsed: false,
+        inputs,
+        outputs,
+      },
+    };
+
+    set((state) => ({
+      entities: [...state.entities, newEntity],
+      nodes: [...state.nodes, newNode],
+    }));
+
+    get().debouncedSyncEntities();
+    get().debouncedSyncGraph();
+
+    return { entity: newEntity, node: newNode };
+  },
+
+  addCanvasNode: async (type: string, position?: { x: number; y: number }) => {
+    const wsId = get().workspaceId || 'production-studio';
+    const pos = position || { x: 300, y: 250 };
+
+    // 1. If it's a story entity type, symmetrically add to both stores:
+    if (['scene_heading', 'action', 'dialogue', 'note'].includes(type)) {
+      const res = await get().addStoryEntity(
+        type as WorkspaceEntity['entityType'],
+        '',
+        '',
+        pos
+      );
+      return res.node;
+    }
+
+    // 2. Operational / Pipeline DAG AI Nodes:
+    const nodeId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `node_${Date.now()}`;
+
+    let title = 'Universal Node';
+    let category = 'default';
+    let inputs: Array<{ id: string; name: string; type?: string }> = [];
+    let outputs: Array<{ id: string; name: string; type?: string }> = [];
+    let extraData: Record<string, unknown> = {};
+
+    if (type === 'dialogue_doctor' || type === 'ai_transform' || type === 'transform') {
+      title = 'Dialogue Doctor AI';
+      category = 'transform';
       inputs = [{ id: 'in-text', name: 'Source Text', type: 'string' }];
-      outputs = [{ id: 'out-processed', name: 'Processed Text', type: 'string' }];
-      initialData = { model: 'gpt-4o', temperature: 0.7, style: 'Dramatic' };
-    } else if (category === 'output') {
-      title = 'Storyboard Output';
-      inputs = [{ id: 'in-processed', name: 'Render In', type: 'string' }];
-      initialData = { aspectRatio: '16:9', resolution: '4K', status: 'Pending' };
+      outputs = [{ id: 'out-processed', name: 'Polished Script', type: 'string' }];
+      extraData = {
+        model: 'gpt-4o-cinematic',
+        temperature: 0.7,
+        style: 'Punchier & Subtext-heavy',
+      };
+    } else if (type === 'storyboard_gen' || type === 'output') {
+      title = 'Storyboard Generator';
+      category = 'output';
+      inputs = [{ id: 'in-processed', name: 'Script In', type: 'string' }];
+      outputs = [{ id: 'out-storyboard', name: 'Storyboard Frame', type: 'image' }];
+      extraData = {
+        aspectRatio: '16:9 Anamorphic',
+        resolution: '4K Ultra-HD',
+        renderPasses: 32,
+        status: 'Active & Ready',
+      };
+    } else if (type === 'custom_transform') {
+      title = 'Custom Transformer';
+      category = 'transform';
+      inputs = [{ id: 'in-data', name: 'Data In', type: 'any' }];
+      outputs = [{ id: 'out-data', name: 'Data Out', type: 'any' }];
+      extraData = {
+        prompt: 'Custom pipeline prompt...',
+        temperature: 0.7,
+      };
     } else {
-      title = 'Universal Node';
       inputs = [{ id: 'in-1', name: 'Input', type: 'any' }];
       outputs = [{ id: 'out-1', name: 'Output', type: 'any' }];
     }
 
-    if (!isCategoryString && categoryOrData.data) {
-      initialData = { ...initialData, ...categoryOrData.data };
-      if (categoryOrData.data.title) title = categoryOrData.data.title;
-      if (categoryOrData.data.inputs) inputs = categoryOrData.data.inputs;
-      if (categoryOrData.data.outputs) outputs = categoryOrData.data.outputs;
-    }
-
-    const newNodeId = crypto.randomUUID ? crypto.randomUUID() : `node_${Date.now()}`;
-
     const newNode: FlowNode = {
-      id: newNodeId,
-      type: 'universalNode',
-      position: defaultPos,
+      id: nodeId,
+      type: type,
+      position: pos,
       data: {
         title,
         category,
         is_collapsed: false,
         inputs,
         outputs,
-        ...initialData,
+        ...extraData,
       },
     };
 
@@ -477,13 +610,13 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
     if (wsId) {
       try {
         await createGraphNode(wsId, {
-          id: newNodeId,
-          type: 'universalNode',
+          id: nodeId,
+          type: type,
           title,
           category,
-          position: defaultPos,
-          position_x: defaultPos.x,
-          position_y: defaultPos.y,
+          position: pos,
+          position_x: pos.x,
+          position_y: pos.y,
           data: newNode.data,
           is_collapsed: false,
         });
@@ -495,6 +628,90 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
     }
 
     return newNode;
+  },
+
+  linkEntityToCanvas: async (entityId: string, position?: { x: number; y: number }) => {
+    const { entities, nodes } = get();
+    const entity = entities.find((e) => e.id === entityId);
+    if (!entity) return;
+
+    // Check if already linked
+    const existingNode = nodes.find((n) => n.data?.entityId === entityId);
+    if (existingNode) {
+      get().focusNodeOnGraph(entityId);
+      return;
+    }
+
+    const nodeId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `node_${Date.now()}`;
+
+    const pos =
+      position || {
+        x: 80,
+        y: Math.max(150, nodes.filter((n) => Boolean(n.data?.entityId)).length * 200 + 150),
+      };
+
+    let inputs: Array<{ id: string; name: string; type?: string }> = [];
+    let outputs: Array<{ id: string; name: string; type?: string }> = [];
+
+    if (entity.entityType === 'scene_heading') {
+      outputs = [{ id: 'out-scene', name: 'Scene Context', type: 'string' }];
+    } else if (entity.entityType === 'action') {
+      inputs = [{ id: 'in-action', name: 'Prev Flow', type: 'string' }];
+      outputs = [{ id: 'out-action', name: 'Next Flow', type: 'string' }];
+    } else if (entity.entityType === 'dialogue') {
+      inputs = [{ id: 'in-dialogue', name: 'Dialogue In', type: 'string' }];
+      outputs = [{ id: 'out-text', name: 'Text Stream', type: 'string' }];
+    }
+
+    const newNode: FlowNode = {
+      id: nodeId,
+      type: entity.entityType,
+      position: pos,
+      data: {
+        entityId: entity.id,
+        entityType: entity.entityType,
+        title: entity.title || entity.entityType.toUpperCase(),
+        content: entity.content,
+        text: entity.content,
+        category: 'input',
+        is_collapsed: false,
+        inputs,
+        outputs,
+      },
+    };
+
+    set((state) => ({ nodes: [...state.nodes, newNode] }));
+    get().debouncedSyncGraph();
+    get().focusNodeOnGraph(entityId);
+  },
+
+  deleteEntity: async (entityId: string) => {
+    set((state) => {
+      const linkedNode = state.nodes.find((n) => n.data?.entityId === entityId);
+      const linkedNodeId = linkedNode?.id;
+
+      return {
+        entities: state.entities.filter((e) => e.id !== entityId),
+        nodes: linkedNodeId
+          ? state.nodes.filter((n) => n.id !== linkedNodeId)
+          : state.nodes,
+        edges: linkedNodeId
+          ? state.edges.filter((e) => e.source !== linkedNodeId && e.target !== linkedNodeId)
+          : state.edges,
+      };
+    });
+
+    get().debouncedSyncEntities();
+    get().debouncedSyncGraph();
+  },
+
+  addNode: async (categoryOrData = 'default', position) => {
+    const isCategoryString = typeof categoryOrData === 'string';
+    const typeStr = isCategoryString ? categoryOrData : (categoryOrData.data?.category as string) || 'default';
+    return get().addCanvasNode(typeStr, position);
   },
 
   deleteNode: async (nodeId: string) => {

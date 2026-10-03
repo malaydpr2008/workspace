@@ -13,37 +13,79 @@ import {
   MonitorPlay,
   Copy,
   Check,
+  Clapperboard,
+  MessageSquare,
+  Sparkles,
 } from 'lucide-react';
 import { useGraphStore, FlowNode } from '@/lib/workspaceStore';
 
-function getCategoryConfig(category?: string) {
-  switch (category) {
-    case 'input':
+function getNodeVisualConfig(nodeType: string, category: string) {
+  const effectiveType = nodeType || category;
+
+  switch (effectiveType) {
+    case 'scene_heading':
       return {
-        accentBorder: 'border-emerald-500/50 hover:border-emerald-400',
-        headerBg: 'bg-emerald-950/80 border-emerald-500/30 text-emerald-200',
+        accentBorder: 'border-amber-500/60 hover:border-amber-400',
+        headerBg: 'bg-amber-950/80 border-amber-500/40 text-amber-200',
+        badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+        pinBg: '!bg-amber-400 !border-amber-200',
+        icon: Clapperboard,
+        label: 'SCENE HEADING',
+        cardBg: 'bg-slate-900/95',
+      };
+    case 'action':
+      return {
+        accentBorder: 'border-emerald-500/60 hover:border-emerald-400',
+        headerBg: 'bg-emerald-950/80 border-emerald-500/40 text-emerald-200',
         badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
         pinBg: '!bg-emerald-400 !border-emerald-200',
         icon: FileText,
-        label: 'INPUT',
+        label: 'ACTION PROSE',
+        cardBg: 'bg-slate-900/95',
       };
-    case 'transform':
+    case 'dialogue':
       return {
-        accentBorder: 'border-purple-500/50 hover:border-purple-400',
-        headerBg: 'bg-purple-950/80 border-purple-500/30 text-purple-200',
+        accentBorder: 'border-cyan-500/60 hover:border-cyan-400',
+        headerBg: 'bg-slate-900 border-cyan-500/40 text-cyan-200',
+        badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+        pinBg: '!bg-cyan-400 !border-cyan-200',
+        icon: MessageSquare,
+        label: 'DIALOGUE',
+        cardBg: 'bg-slate-900/95',
+      };
+    case 'note':
+      return {
+        accentBorder: 'border-amber-400/80 hover:border-amber-300',
+        headerBg: 'bg-amber-950/90 border-amber-500/50 text-amber-200',
+        badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+        pinBg: '!bg-amber-400 !border-amber-200',
+        icon: Sparkles,
+        label: 'STICKY NOTE',
+        cardBg: 'bg-amber-950/20',
+      };
+    case 'ai_transform':
+    case 'transform':
+    case 'dialogue_doctor':
+    case 'custom_transform':
+      return {
+        accentBorder: 'border-purple-500/60 hover:border-purple-400',
+        headerBg: 'bg-purple-950/80 border-purple-500/40 text-purple-200',
         badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
         pinBg: '!bg-purple-400 !border-purple-200',
         icon: Cpu,
-        label: 'TRANSFORM',
+        label: 'AI TRANSFORM',
+        cardBg: 'bg-slate-900/95',
       };
     case 'output':
+    case 'storyboard_gen':
       return {
-        accentBorder: 'border-sky-500/50 hover:border-sky-400',
-        headerBg: 'bg-sky-950/80 border-sky-500/30 text-sky-200',
+        accentBorder: 'border-sky-500/60 hover:border-sky-400',
+        headerBg: 'bg-sky-950/80 border-sky-500/40 text-sky-200',
         badgeBg: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
         pinBg: '!bg-sky-400 !border-sky-200',
         icon: MonitorPlay,
         label: 'OUTPUT',
+        cardBg: 'bg-slate-900/95',
       };
     default:
       return {
@@ -53,35 +95,27 @@ function getCategoryConfig(category?: string) {
         pinBg: '!bg-indigo-400 !border-indigo-200',
         icon: Sliders,
         label: 'NODE',
+        cardBg: 'bg-slate-900/95',
       };
   }
 }
 
-export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, selected }) => {
+export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, selected, type: nodeTypeProp }) => {
   const { deleteNode, updateNodeData } = useGraphStore();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [localTitle, setLocalTitle] = useState(data.title || 'Untitled Node');
   const [copied, setCopied] = useState(false);
 
-  const category = (data.category as string) || 'default';
-  const config = getCategoryConfig(category);
+  const effectiveType = (data.entityType as string) || nodeTypeProp || (data.category as string) || 'universalNode';
+  const category = (data.category as string) || (['ai_transform', 'transform', 'dialogue_doctor'].includes(effectiveType) ? 'transform' : ['output', 'storyboard_gen'].includes(effectiveType) ? 'output' : 'input');
+  const config = getNodeVisualConfig(effectiveType, category);
   const IconComponent = config.icon;
   const isCollapsed = Boolean(data.is_collapsed);
 
-  // Fallback sockets if none configured in data
-  const inputs =
-    data.inputs && data.inputs.length > 0
-      ? data.inputs
-      : category === 'input'
-      ? []
-      : [{ id: 'in-default', name: 'Input', type: 'any' }];
-
-  const outputs =
-    data.outputs && data.outputs.length > 0
-      ? data.outputs
-      : category === 'output'
-      ? []
-      : [{ id: 'out-default', name: 'Output', type: 'any' }];
+  // Sockets
+  const inputs = data.inputs || [];
+  const outputs = data.outputs || [];
+  const hasSockets = inputs.length > 0 || outputs.length > 0;
 
   const handleToggleCollapse = useCallback(() => {
     updateNodeData(id, { is_collapsed: !isCollapsed });
@@ -109,9 +143,9 @@ export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, se
 
   return (
     <div
-      className={`relative min-w-[300px] max-w-[380px] rounded-xl bg-slate-900/95 border backdrop-blur-md shadow-2xl transition-all duration-150 ${
-        config.accentBorder
-      } ${selected ? 'ring-2 ring-cyan-400 shadow-cyan-500/20 shadow-lg' : ''}`}
+      className={`relative min-w-[310px] max-w-[390px] rounded-xl border backdrop-blur-md shadow-2xl transition-all duration-150 ${
+        config.cardBg
+      } ${config.accentBorder} ${selected ? 'ring-2 ring-cyan-400 shadow-cyan-500/20 shadow-lg' : ''}`}
     >
       {/* Header Bar */}
       <div
@@ -149,10 +183,10 @@ export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, se
 
           {data.entityId ? (
             <span
-              className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 font-bold uppercase shrink-0"
+              className={`text-[9px] font-mono px-1.5 py-0.5 rounded border font-bold uppercase shrink-0 ${config.badgeBg}`}
               title={`Linked to canonical entity ID: ${data.entityId}`}
             >
-              Linked Entity: {data.entityType || 'dialogue'}
+              Linked Entity: {data.entityType || effectiveType}
             </span>
           ) : (
             <span
@@ -191,59 +225,82 @@ export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, se
       </div>
 
       {/* Sockets Row (Left Inputs & Right Outputs) */}
-      <div className="px-3 py-2 flex justify-between items-start gap-4 text-[11px] font-mono border-b border-slate-800/80 bg-slate-950/40">
-        {/* Left Column (Inputs) */}
-        <div className="flex flex-col space-y-2 flex-1">
-          {inputs.map((inp) => (
-            <div key={inp.id} className="relative flex items-center space-x-2">
-              <Handle
-                type="target"
-                position={Position.Left}
-                id={inp.id}
-                className={`!w-3 !h-3 !-left-[18px] rounded-full border-2 !border-slate-900 transition-all hover:scale-125 hover:!border-white ${config.pinBg}`}
-              />
-              <span className="text-slate-300 font-medium">{inp.name}</span>
-              {inp.type && <span className="text-[9px] text-slate-500">[{inp.type}]</span>}
-            </div>
-          ))}
-          {inputs.length === 0 && <span className="text-[10px] text-slate-600 italic">No inputs</span>}
-        </div>
+      {hasSockets && (
+        <div className="px-3 py-2 flex justify-between items-start gap-4 text-[11px] font-mono border-b border-slate-800/80 bg-slate-950/40">
+          {/* Left Column (Inputs) */}
+          <div className="flex flex-col space-y-2 flex-1">
+            {inputs.map((inp) => (
+              <div key={inp.id} className="relative flex items-center space-x-2">
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={inp.id}
+                  className={`!w-3 !h-3 !-left-[18px] rounded-full border-2 !border-slate-900 transition-all hover:scale-125 hover:!border-white ${config.pinBg}`}
+                />
+                <span className="text-slate-300 font-medium">{inp.name}</span>
+                {inp.type && <span className="text-[9px] text-slate-500">[{inp.type}]</span>}
+              </div>
+            ))}
+            {inputs.length === 0 && <span className="text-[10px] text-slate-600 italic">No inputs</span>}
+          </div>
 
-        {/* Right Column (Outputs) */}
-        <div className="flex flex-col space-y-2 items-end flex-1">
-          {outputs.map((out) => (
-            <div key={out.id} className="relative flex items-center space-x-2">
-              {out.type && <span className="text-[9px] text-slate-500">[{out.type}]</span>}
-              <span className="text-slate-300 font-medium">{out.name}</span>
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={out.id}
-                className={`!w-3 !h-3 !-right-[18px] rounded-full border-2 !border-slate-900 transition-all hover:scale-125 hover:!border-white ${config.pinBg}`}
-              />
-            </div>
-          ))}
-          {outputs.length === 0 && <span className="text-[10px] text-slate-600 italic">No outputs</span>}
+          {/* Right Column (Outputs) */}
+          <div className="flex flex-col space-y-2 items-end flex-1">
+            {outputs.map((out) => (
+              <div key={out.id} className="relative flex items-center space-x-2">
+                {out.type && <span className="text-[9px] text-slate-500">[{out.type}]</span>}
+                <span className="text-slate-300 font-medium">{out.name}</span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={out.id}
+                  className={`!w-3 !h-3 !-right-[18px] rounded-full border-2 !border-slate-900 transition-all hover:scale-125 hover:!border-white ${config.pinBg}`}
+                />
+              </div>
+            ))}
+            {outputs.length === 0 && <span className="text-[10px] text-slate-600 italic">No outputs</span>}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Collapsible Card Body */}
       {!isCollapsed && (
         <div className="p-3 space-y-3 text-xs text-slate-200">
-          {/* If Linked to an Entity: Direct Text & Content Synchronization */}
-          {data.entityId ? (
+          {/* Specialized Story Node Types */}
+          {effectiveType === 'scene_heading' && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-[11px] text-slate-400">
-                <span className="font-semibold text-emerald-300">
-                  {data.entityType === 'dialogue' ? 'Character Dialogue' : 'Entity Content'}
+              <div className="flex items-center justify-between text-[11px] text-amber-400 font-mono">
+                <span className="font-semibold uppercase tracking-wider">Slugline Specification</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30">
+                  SLUGLINE
                 </span>
-                <span className="font-mono text-[10px] text-emerald-400">BI-DIRECTIONAL SYNC</span>
               </div>
-              {data.title && (
-                <div className="text-[11px] font-mono text-slate-300 font-bold uppercase tracking-wider">
-                  Speaker: {data.title}
-                </div>
-              )}
+              <input
+                type="text"
+                value={data.content ?? data.text ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value.toUpperCase();
+                  handleDataChange('content', val);
+                  handleDataChange('text', val);
+                  handleDataChange('title', val);
+                }}
+                placeholder="INT. SCENE LOCATION - TIME"
+                className="nodrag nopan w-full bg-slate-950/80 border border-amber-500/40 focus:border-amber-400 rounded-lg p-2 font-mono font-bold text-sm text-amber-300 uppercase focus:outline-none transition-colors"
+              />
+              <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-400">
+                <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">INT / EXT</span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">DAY / NIGHT</span>
+                <span className="ml-auto text-amber-400/80">Scene Anchor</span>
+              </div>
+            </div>
+          )}
+
+          {effectiveType === 'action' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-emerald-400 font-mono">
+                <span className="font-semibold uppercase tracking-wider">Action Prose</span>
+                <span className="text-[10px] text-emerald-400/70 font-mono">Sequential Beat</span>
+              </div>
               <textarea
                 value={data.content ?? data.text ?? ''}
                 onChange={(e) => {
@@ -251,73 +308,120 @@ export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, se
                   handleDataChange('content', val);
                   handleDataChange('text', val);
                 }}
-                placeholder="Enter script text or dialogue..."
-                rows={4}
-                className="nodrag nopan nowheel w-full bg-slate-950/80 border border-emerald-500/40 focus:border-emerald-400 rounded-lg p-2 text-xs font-mono text-slate-100 placeholder-slate-600 focus:outline-none resize-none transition-colors"
+                placeholder="Describe the action or visual beats on screen..."
+                rows={3}
+                className="nodrag nopan nowheel w-full bg-slate-950/80 border border-emerald-500/40 focus:border-emerald-400 rounded-lg p-2 font-serif text-xs text-slate-100 placeholder-slate-600 focus:outline-none resize-none transition-colors"
               />
-              <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                <span>Entity: {String(data.entityId).slice(0, 8)}...</span>
-                <span>Type: {data.entityType}</span>
+            </div>
+          )}
+
+          {effectiveType === 'dialogue' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-[10px] font-mono text-slate-400">SPEAKER:</span>
+                  <input
+                    type="text"
+                    value={data.title ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setLocalTitle(val);
+                      handleDataChange('title', val);
+                    }}
+                    placeholder="CHARACTER"
+                    className="nodrag nopan bg-cyan-950/40 border border-cyan-500/40 focus:border-cyan-400 rounded px-2 py-0.5 text-xs font-mono font-bold text-cyan-300 uppercase outline-none"
+                  />
+                </div>
+                <span className="font-mono text-[9px] text-cyan-400">BI-DIRECTIONAL</span>
+              </div>
+              <textarea
+                value={data.content ?? data.text ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleDataChange('content', val);
+                  handleDataChange('text', val);
+                }}
+                placeholder="Type spoken dialogue..."
+                rows={3}
+                className="nodrag nopan nowheel w-full bg-slate-950/80 border border-cyan-500/40 focus:border-cyan-400 rounded-lg p-2 font-serif text-xs text-slate-100 placeholder-slate-600 focus:outline-none resize-none transition-colors"
+              />
+            </div>
+          )}
+
+          {effectiveType === 'note' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-amber-300 font-mono">
+                <span className="font-semibold">Sticky Production Note</span>
+                <span className="text-[10px] text-amber-400/80">Directorial</span>
+              </div>
+              <textarea
+                value={data.content ?? data.text ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleDataChange('content', val);
+                  handleDataChange('text', val);
+                }}
+                placeholder="Note down director notes, lighting context, or production memos..."
+                rows={3}
+                className="nodrag nopan nowheel w-full bg-amber-950/30 border border-amber-500/40 focus:border-amber-400 rounded-lg p-2 text-xs font-sans text-amber-100 placeholder-amber-700/60 focus:outline-none resize-none transition-colors"
+              />
+            </div>
+          )}
+
+          {/* AI & Pipeline Tool Nodes */}
+          {category === 'transform' && effectiveType !== 'scene_heading' && effectiveType !== 'action' && effectiveType !== 'dialogue' && effectiveType !== 'note' && (
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <label className="text-[11px] text-slate-400 flex justify-between">
+                  <span>AI Engine / Model</span>
+                  <span className="text-[10px] text-purple-400 font-mono">LLM</span>
+                </label>
+                <select
+                  value={data.model || 'gpt-4o-cinematic'}
+                  onChange={(e) => handleDataChange('model', e.target.value)}
+                  className="nodrag nopan w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  <option value="gpt-4o-cinematic">GPT-4o (Cinematic Co-pilot)</option>
+                  <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Dialogue Doctor)</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (Story Analyzer)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-slate-400 flex justify-between">
+                  <span>Punch-Up Tone</span>
+                  <span className="text-[10px] text-purple-400 font-mono">STYLE</span>
+                </label>
+                <select
+                  value={data.style || 'Punchier & Subtext-heavy'}
+                  onChange={(e) => handleDataChange('style', e.target.value)}
+                  className="nodrag nopan w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  <option value="Punchier & Subtext-heavy">Punchier & Subtext-heavy</option>
+                  <option value="Cynical Noir">Cynical Noir</option>
+                  <option value="Urgent & Sparse">Urgent & Sparse</option>
+                  <option value="Naturalistic Mumblecore">Naturalistic Mumblecore</option>
+                </select>
+              </div>
+
+              <div className="pt-1 space-y-1">
+                <div className="flex justify-between text-[11px] text-slate-400">
+                  <span>Creativity (Temp):</span>
+                  <span className="font-mono text-purple-300 font-semibold">{data.temperature ?? 0.7}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.0"
+                  max="1.0"
+                  step="0.05"
+                  value={data.temperature ?? 0.7}
+                  onChange={(e) => handleDataChange('temperature', parseFloat(e.target.value))}
+                  className="nodrag nopan w-full accent-purple-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                />
               </div>
             </div>
-          ) : (
-            /* Standalone Operational / Transformation Node */
-            <>
-              {/* Transform Node Form Controls */}
-              {category === 'transform' && (
-                <div className="space-y-2">
-                  <div className="space-y-1">
-                    <label className="text-[11px] text-slate-400 flex justify-between">
-                      <span>AI Engine / Model</span>
-                      <span className="text-[10px] text-purple-400 font-mono">LLM</span>
-                    </label>
-                    <select
-                      value={data.model || 'gpt-4o-cinematic'}
-                      onChange={(e) => handleDataChange('model', e.target.value)}
-                      className="nodrag nopan w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
-                    >
-                      <option value="gpt-4o-cinematic">GPT-4o (Cinematic Co-pilot)</option>
-                      <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Dialogue Doctor)</option>
-                      <option value="gemini-1.5-pro">Gemini 1.5 Pro (Story Analyzer)</option>
-                    </select>
-                  </div>
+          )}
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] text-slate-400 flex justify-between">
-                      <span>Punch-Up Tone</span>
-                      <span className="text-[10px] text-purple-400 font-mono">STYLE</span>
-                    </label>
-                    <select
-                      value={data.style || 'Punchier & Subtext-heavy'}
-                      onChange={(e) => handleDataChange('style', e.target.value)}
-                      className="nodrag nopan w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
-                    >
-                      <option value="Punchier & Subtext-heavy">Punchier & Subtext-heavy</option>
-                      <option value="Cynical Noir">Cynical Noir</option>
-                      <option value="Urgent & Sparse">Urgent & Sparse</option>
-                      <option value="Naturalistic Mumblecore">Naturalistic Mumblecore</option>
-                    </select>
-                  </div>
-
-                  <div className="pt-1 space-y-1">
-                    <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>Creativity (Temp):</span>
-                      <span className="font-mono text-purple-300 font-semibold">{data.temperature ?? 0.7}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.0"
-                      max="1.0"
-                      step="0.05"
-                      value={data.temperature ?? 0.7}
-                      onChange={(e) => handleDataChange('temperature', parseFloat(e.target.value))}
-                      className="nodrag nopan w-full accent-purple-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-                    />
-                  </div>
-                </div>
-              )}
-
-          {/* Output Node Form Controls */}
           {category === 'output' && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[11px]">
@@ -357,28 +461,31 @@ export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, se
             </div>
           )}
 
-          {/* Default / Generic Node Body */}
-          {category !== 'input' && category !== 'transform' && category !== 'output' && (
-            <div className="space-y-2">
-              <label className="text-[11px] text-slate-400">Node Description / Notes</label>
-              <textarea
-                value={data.notes ?? ''}
-                onChange={(e) => handleDataChange('notes', e.target.value)}
-                placeholder="Universal graph node metadata..."
-                rows={2}
-                className="nodrag nopan nowheel w-full bg-slate-950/80 border border-slate-700/80 rounded-lg p-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none transition-colors"
-              />
-            </div>
-          )}
-            </>
-          )}
+          {/* Fallback for other custom nodes */}
+          {effectiveType !== 'scene_heading' &&
+            effectiveType !== 'action' &&
+            effectiveType !== 'dialogue' &&
+            effectiveType !== 'note' &&
+            category !== 'transform' &&
+            category !== 'output' && (
+              <div className="space-y-2">
+                <label className="text-[11px] text-slate-400">Node Description / Notes</label>
+                <textarea
+                  value={data.notes ?? ''}
+                  onChange={(e) => handleDataChange('notes', e.target.value)}
+                  placeholder="Universal graph node metadata..."
+                  rows={2}
+                  className="nodrag nopan nowheel w-full bg-slate-950/80 border border-slate-700/80 rounded-lg p-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none transition-colors"
+                />
+              </div>
+            )}
         </div>
       )}
 
       {/* Subtle Node Footer Bar */}
       <div className="px-3 py-1.5 bg-slate-950/70 rounded-b-xl border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-500">
         <span>ID: {id.slice(0, 8)}...</span>
-        <span>xyflow • v12</span>
+        <span>{data.entityId ? `entity: ${String(data.entityId).slice(0, 6)}...` : 'xyflow • v12'}</span>
       </div>
     </div>
   );
