@@ -7,9 +7,12 @@ import { NodeDispatcher } from './NodeDispatcher';
 import { CommandPalette } from './navigation/CommandPalette';
 import { TeamManagementModal } from './team/TeamManagementModal';
 import { StudioActivityDrawer } from './activity/StudioActivityDrawer';
-import { AlertCircle, RefreshCw, X, Shield, Users, Activity } from 'lucide-react';
+import { WorkspaceGraphCanvas } from './graph/WorkspaceGraphCanvas';
+import '@xyflow/react/dist/style.css';
+import { AlertCircle, RefreshCw, X, Shield, Users, Activity, Network, FileText } from 'lucide-react';
 import { WorkspaceRole } from '@/types/workspace';
 import { createWorkspaceSocket, WorkspaceSocketClient } from '@/lib/websocket';
+import { useGraphStore } from '@/lib/workspaceStore';
 
 interface WorkspaceShellProps {
   slug?: string;
@@ -65,6 +68,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'graph' | 'document'>('graph');
   const socketClientRef = useRef<WorkspaceSocketClient | null>(null);
   const localUserIdRef = useRef<string>('usr-collab-lead');
 
@@ -75,6 +79,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
   useEffect(() => {
     if (currentWorkspace?.id) {
       loadCurrentUserRole(currentWorkspace.id);
+      useGraphStore.getState().loadGraph(currentWorkspace.id);
     }
   }, [currentWorkspace?.id, loadCurrentUserRole]);
 
@@ -245,6 +250,34 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
           </div>
 
           <div className="flex items-center space-x-2 text-xs font-mono">
+            {/* Canvas Mode Switcher: Infinite Visual Graph vs Flat Document View */}
+            <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+              <button
+                onClick={() => setViewMode('graph')}
+                className={`flex items-center space-x-1 px-2.5 py-0.5 rounded text-[11px] font-mono transition-all ${
+                  viewMode === 'graph'
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Infinite Pan/Zoom Node Graph Canvas (@xyflow/react)"
+              >
+                <Network className="w-3 h-3" />
+                <span>Visual Graph</span>
+              </button>
+              <button
+                onClick={() => setViewMode('document')}
+                className={`flex items-center space-x-1 px-2.5 py-0.5 rounded text-[11px] font-mono transition-all ${
+                  viewMode === 'document'
+                    ? 'bg-slate-800 text-white font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Traditional Flat Document / Block Editor"
+              >
+                <FileText className="w-3 h-3" />
+                <span>Document View</span>
+              </button>
+            </div>
+
             {/* Studio Activity Stream & Audit Log Drawer Toggle */}
             <button
               onClick={() => setIsActivityDrawerOpen(true)}
@@ -267,7 +300,10 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
           </div>
         </div>
 
-        <NodeDispatcher />
+        {/* Central Canvas Workspace */}
+        <div className="flex-1 min-h-0 relative w-full h-full overflow-hidden">
+          {viewMode === 'graph' ? <WorkspaceGraphCanvas /> : <NodeDispatcher />}
+        </div>
       </main>
 
       {/* Global Universal Command Palette (CMD+K / Ctrl+K) */}

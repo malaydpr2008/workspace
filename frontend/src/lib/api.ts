@@ -23,6 +23,9 @@ import {
   ScriptCoverageReport,
   DialoguePunchUpSuggestion,
   BreakdownSuggestion,
+  GraphNodePayload,
+  GraphEdgePayload,
+  WorkspaceGraphResponse,
 } from '@/types/workspace';
 
 export function getApiBaseUrl(): string {
@@ -1050,6 +1053,87 @@ export async function autoDetectSceneBreakdown(
   const data = await handleResponse<{ suggestions: BreakdownSuggestion[] }>(res);
   return data.suggestions || [];
 }
+
+// -------------------------------------------------------------
+// Visual Node Graph (ComfyUI / React Flow) API
+// -------------------------------------------------------------
+
+export async function fetchWorkspaceGraph(workspaceId: string): Promise<WorkspaceGraphResponse> {
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/graph/`, {
+    cache: 'no-store',
+  });
+  return handleResponse<WorkspaceGraphResponse>(res);
+}
+
+export async function syncWorkspaceGraph(
+  workspaceId: string,
+  payload: { nodes: GraphNodePayload[]; edges: GraphEdgePayload[] }
+): Promise<{ status: string; nodes: GraphNodePayload[]; edges: GraphEdgePayload[] }> {
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/graph/sync/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<{ status: string; nodes: GraphNodePayload[]; edges: GraphEdgePayload[] }>(res);
+}
+
+export async function createGraphNode(
+  workspaceId: string,
+  data: Partial<GraphNodePayload>
+): Promise<GraphNodePayload> {
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/nodes/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<GraphNodePayload>(res);
+}
+
+export async function updateGraphNode(
+  workspaceId: string,
+  nodeId: string,
+  data: Partial<GraphNodePayload>
+): Promise<GraphNodePayload> {
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/nodes/${nodeId}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<GraphNodePayload>(res);
+}
+
+export async function deleteGraphNode(workspaceId: string, nodeId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/nodes/${nodeId}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete graph node failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function createGraphEdge(
+  workspaceId: string,
+  data: Partial<GraphEdgePayload>
+): Promise<GraphEdgePayload> {
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/edges/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<GraphEdgePayload>(res);
+}
+
+export async function deleteGraphEdge(workspaceId: string, edgeId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/edges/${edgeId}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete graph edge failed [${res.status}]: ${errorBody}`);
+  }
+}
+
 
 
 

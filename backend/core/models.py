@@ -33,7 +33,7 @@ class WorkspaceNode(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="nodes")
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="workspace_nodes")
     parent = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.CASCADE, related_name="children"
     )
@@ -607,6 +607,40 @@ class ScriptCoverageReport(models.Model):
 
     def __str__(self):
         return f"Coverage: {self.title} [{self.verdict}]"
+
+
+class Node(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="nodes")
+    type = models.CharField(max_length=64, default="universalNode")
+    title = models.CharField(max_length=128, default="Untitled Node")
+    category = models.CharField(max_length=64, default="default")
+    position_x = models.FloatField(default=100.0)
+    position_y = models.FloatField(default=100.0)
+    data = models.JSONField(default=dict, blank=True)
+    is_collapsed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.title} ({self.type})"
+
+
+class Edge(models.Model):
+    id = models.CharField(max_length=128, primary_key=True)  # e.g. "xy-edge__node1output-node2input"
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="edges")
+    source = models.ForeignKey(Node, on_delete=models.CASCADE, related_name="outgoing_edges")
+    target = models.ForeignKey(Node, on_delete=models.CASCADE, related_name="incoming_edges")
+    source_handle = models.CharField(max_length=64, null=True, blank=True)
+    target_handle = models.CharField(max_length=64, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Edge {self.id}: {self.source_id} -> {self.target_id}"
+
 
 
 

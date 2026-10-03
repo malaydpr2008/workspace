@@ -21,6 +21,8 @@ from core.models import (
     WorkspaceMembership,
     StudioActivityLog,
     ScriptCoverageReport,
+    Node,
+    Edge,
 )
 
 
@@ -604,6 +606,64 @@ class ScriptCoverageReportSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "workspace_name", "screenplay_title", "created_at"]
+
+
+class NodeSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(required=False)
+    position = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Node
+        fields = [
+            "id",
+            "workspace",
+            "type",
+            "title",
+            "category",
+            "position_x",
+            "position_y",
+            "position",
+            "data",
+            "is_collapsed",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+    def get_position(self, obj):
+        return {"x": obj.position_x, "y": obj.position_y}
+
+    def to_internal_value(self, data):
+        mutable_data = data.copy() if hasattr(data, "copy") else dict(data)
+        if "position" in mutable_data and isinstance(mutable_data["position"], dict):
+            pos = mutable_data["position"]
+            if "x" in pos:
+                mutable_data["position_x"] = pos["x"]
+            if "y" in pos:
+                mutable_data["position_y"] = pos["y"]
+        return super().to_internal_value(mutable_data)
+
+
+class EdgeSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(max_length=128, required=False)
+    sourceHandle = serializers.CharField(source="source_handle", allow_null=True, required=False)
+    targetHandle = serializers.CharField(source="target_handle", allow_null=True, required=False)
+
+    class Meta:
+        model = Edge
+        fields = [
+            "id",
+            "workspace",
+            "source",
+            "target",
+            "source_handle",
+            "target_handle",
+            "sourceHandle",
+            "targetHandle",
+            "created_at",
+        ]
+        read_only_fields = ["created_at"]
+
 
 
 

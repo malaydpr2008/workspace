@@ -27,6 +27,8 @@ from core.models import (
     WorkspaceMembership,
     StudioActivityLog,
     ScriptCoverageReport,
+    Node,
+    Edge,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -50,6 +52,8 @@ from core.serializers import (
     WorkspaceMembershipSerializer,
     StudioActivityLogSerializer,
     ScriptCoverageReportSerializer,
+    NodeSerializer,
+    EdgeSerializer,
 )
 from core.permissions import RolePermissionPolicy
 
@@ -57,6 +61,166 @@ from core.permissions import RolePermissionPolicy
 class WorkspaceViewSet(viewsets.ModelViewSet):
     queryset = Workspace.objects.all()
     serializer_class = WorkspaceSerializer
+
+    @action(detail=True, methods=["get"], url_path="graph")
+    def graph(self, request, pk=None):
+        workspace = self.get_object()
+        nodes = workspace.nodes.all()
+        edges = workspace.edges.all()
+        return Response({
+            "workspace": WorkspaceSerializer(workspace).data,
+            "nodes": NodeSerializer(nodes, many=True).data,
+            "edges": EdgeSerializer(edges, many=True).data,
+        })
+
+    @action(detail=True, methods=["post"], url_path="graph/sync")
+    def sync_graph(self, request, pk=None):
+        workspace = self.get_object()
+        nodes_data = request.data.get("nodes", [])
+        edges_data = request.data.get("edges", [])
+
+        with transaction.atomic():
+            synced_node_ids = set()
+            for item in nodes_data:
+                node_id = item.get("id")
+                pos = item.get("position", {}) if isinstance(item.get("position"), dict) else {}
+                pos_x = item.get("position_x", pos.get("x", 100.0))
+                pos_y = item.get("position_y", pos.get("y", 100.0))
+                defaults = {
+                    "workspace": workspace,
+                    "type": item.get("type", "universalNode"),
+                    "title": item.get("title", "Untitled Node"),
+                    "category": item.get("category", "default"),
+                    "position_x": float(pos_x),
+                    "position_y": float(pos_y),
+                    "data": item.get("data", {}) if isinstance(item.get("data"), dict) else {},
+                    "is_collapsed": bool(item.get("is_collapsed", False)),
+                }
+                if node_id:
+                    node_obj, _ = Node.objects.update_or_create(id=node_id, defaults=defaults)
+                else:
+                    node_obj = Node.objects.create(**defaults)
+                synced_node_ids.add(str(node_obj.id))
+
+            synced_edge_ids = set()
+            for item in edges_data:
+                edge_id = item.get("id")
+                source_id = item.get("source")
+                target_id = item.get("target")
+                if not edge_id or not source_id or not target_id:
+                    continue
+                source_node = Node.objects.filter(id=source_id, workspace=workspace).first()
+                target_node = Node.objects.filter(id=target_id, workspace=workspace).first()
+                if not source_node or not target_node:
+                    continue
+                source_handle = item.get("sourceHandle") or item.get("source_handle")
+                target_handle = item.get("targetHandle") or item.get("target_handle")
+                edge_obj, _ = Edge.objects.update_or_create(
+                    id=str(edge_id),
+                    defaults={
+                        "workspace": workspace,
+                        "source": source_node,
+                        "target": target_node,
+                        "source_handle": source_handle,
+                        "target_handle": target_handle,
+                    },
+                )
+                synced_edge_ids.add(str(edge_obj.id))
+
+            if edges_data is not None:
+                workspace.edges.exclude(id__in=synced_edge_ids).delete()
+
+        nodes = workspace.nodes.all()
+        edges = workspace.edges.all()
+        return Response({
+            "status": "synced",
+            "nodes": NodeSerializer(nodes, many=True).data,
+            "edges": EdgeSerializer(edges, many=True).data,
+        })
+
+    @action(detail=True, methods=["get", "post", "patch", "delete"], url_path="nodes")
+    def workspace_nodes_crud(self, request, pk=None):
+        workspace = self.get_object()
+        if request.method == "GET":
+            return Response(NodeSerializer(workspace.nodes.all(), many=True).data)
+
+        elif request.method == "POST":
+            data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+            data["workspace"] = str(workspace.id)
+            serializer = NodeSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        elif request.method == "PATCH":
+            node_id = request.data.get("id") or request.query_params.get("id")
+            if not node_id:
+                return Response({"error": "Node ID is required for PATCH"}, status=status.HTTP_400_BAD_REQUEST)
+            node = Node.objects.filter(id=node_id, workspace=workspace).first()
+            if not node:
+                return Response({"error": "Node not found"}, status=status.HTTP_404_NOT_FOUND)
+            serializer = NodeSerializer(node, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+
+        elif request.method == "DELETE":
+            node_id = request.data.get("id") or request.query_params.get("id")
+            if not node_id:
+                return Response({"error": "Node ID is required for DELETE"}, status=status.HTTP_400_BAD_REQUEST)
+            node = Node.objects.filter(id=node_id, workspace=workspace).first()
+            if not node:
+                return Response({"error": "Node not found"}, status=status.HTTP_404_NOT_FOUND)
+            node.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["patch", "delete"], url_path=r"nodes/(?P<node_id>[^/.]+)")
+    def workspace_node_detail(self, request, pk=None, node_id=None):
+        workspace = self.get_object()
+        node = Node.objects.filter(id=node_id, workspace=workspace).first()
+        if not node:
+            return Response({"error": "Node not found"}, status=status.HTTP_404_NOT_FOUND)
+        if request.method == "PATCH":
+            serializer = NodeSerializer(node, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        elif request.method == "DELETE":
+            node.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["get", "post", "delete"], url_path="edges")
+    def workspace_edges_crud(self, request, pk=None):
+        workspace = self.get_object()
+        if request.method == "GET":
+            return Response(EdgeSerializer(workspace.edges.all(), many=True).data)
+
+        elif request.method == "POST":
+            data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+            data["workspace"] = str(workspace.id)
+            serializer = EdgeSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        elif request.method == "DELETE":
+            edge_id = request.data.get("id") or request.query_params.get("id")
+            if not edge_id:
+                return Response({"error": "Edge ID is required for DELETE"}, status=status.HTTP_400_BAD_REQUEST)
+            edge = Edge.objects.filter(id=edge_id, workspace=workspace).first()
+            if not edge:
+                return Response({"error": "Edge not found"}, status=status.HTTP_404_NOT_FOUND)
+            edge.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["delete"], url_path=r"edges/(?P<edge_id>[^/.]+)")
+    def workspace_edge_detail(self, request, pk=None, edge_id=None):
+        workspace = self.get_object()
+        edge = Edge.objects.filter(id=edge_id, workspace=workspace).first()
+        if not edge:
+            return Response({"error": "Edge not found"}, status=status.HTTP_404_NOT_FOUND)
+        edge.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class WorkspaceNodeViewSet(viewsets.ModelViewSet):

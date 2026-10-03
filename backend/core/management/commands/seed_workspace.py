@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from core.models import Workspace, WorkspaceNode, Character, Shot, ShotBlockCoverage
+from core.models import Workspace, WorkspaceNode, Character, Shot, ShotBlockCoverage, Node, Edge
 
 
 class Command(BaseCommand):
@@ -16,6 +16,7 @@ class Command(BaseCommand):
         if not created:
             self.stdout.write("Workspace already exists, updating nodes...")
             # Clean up prior seed nodes for idempotency
+            workspace.workspace_nodes.all().delete()
             workspace.nodes.all().delete()
             workspace.characters.all().delete()
 
@@ -144,4 +145,75 @@ class Command(BaseCommand):
         )
         self.stdout.write(f"Created Article root node: {article.title}")
 
+        # 7. Infinite Visual Graph: Input -> Transform -> Output Nodes & Edges
+        node_input = Node.objects.create(
+            workspace=workspace,
+            type="universalNode",
+            title="Screenplay Input",
+            category="input",
+            position_x=100.0,
+            position_y=160.0,
+            data={
+                "label": "Scene 1 Draft",
+                "format": "Final Draft",
+                "text": "EXT. NEON ROOFTOP - NIGHT\nRain washes over the high-rise terrace as city holograms flicker into the mist.",
+                "inputs": [],
+                "outputs": [{"id": "out-text", "name": "Text Stream", "type": "string"}],
+            },
+        )
+
+        node_transform = Node.objects.create(
+            workspace=workspace,
+            type="universalNode",
+            title="Dialogue Doctor AI",
+            category="transform",
+            position_x=520.0,
+            position_y=160.0,
+            data={
+                "model": "gpt-4o-cinematic",
+                "temperature": 0.7,
+                "style": "Punchier & Subtext-heavy",
+                "inputs": [{"id": "in-text", "name": "Source Text", "type": "string"}],
+                "outputs": [{"id": "out-processed", "name": "Polished Script", "type": "string"}],
+            },
+        )
+
+        node_output = Node.objects.create(
+            workspace=workspace,
+            type="universalNode",
+            title="Production Storyboard",
+            category="output",
+            position_x=940.0,
+            position_y=160.0,
+            data={
+                "aspectRatio": "16:9 Anamorphic",
+                "resolution": "4K Ultra-HD",
+                "renderPasses": 32,
+                "inputs": [{"id": "in-processed", "name": "Script In", "type": "string"}],
+                "outputs": [],
+            },
+        )
+
+        edge1 = Edge.objects.create(
+            id=f"xy-edge__{node_input.id}out-text-{node_transform.id}in-text",
+            workspace=workspace,
+            source=node_input,
+            target=node_transform,
+            source_handle="out-text",
+            target_handle="in-text",
+        )
+
+        edge2 = Edge.objects.create(
+            id=f"xy-edge__{node_transform.id}out-processed-{node_output.id}in-processed",
+            workspace=workspace,
+            source=node_transform,
+            target=node_output,
+            source_handle="out-processed",
+            target_handle="in-processed",
+        )
+
+        self.stdout.write(f"Created Graph nodes: {node_input.title} -> {node_transform.title} -> {node_output.title}")
+        self.stdout.write(f"Created Graph edges: {edge1.id}, {edge2.id}")
+
         self.stdout.write(self.style.SUCCESS("Successfully seeded workspace database."))
+

@@ -427,6 +427,45 @@ export interface BreakdownSuggestion {
   reason: string;
 }
 
+export interface GraphNodeData {
+  label?: string;
+  category?: 'input' | 'transform' | 'output' | 'default' | string;
+  title?: string;
+  inputs?: Array<{ id: string; name: string; type?: string }>;
+  outputs?: Array<{ id: string; name: string; type?: string }>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
 
+export interface GraphNodePayload {
+  id: string;
+  workspace?: string;
+  type?: string;
+  title?: string;
+  category?: string;
+  position_x?: number;
+  position_y?: number;
+  position?: { x: number; y: number };
+  data?: GraphNodeData;
+  is_collapsed?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
 
+export interface GraphEdgePayload {
+  id: string;
+  workspace?: string;
+  source: string;
+  target: string;
+  source_handle?: string | null;
+  target_handle?: string | null;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+  created_at?: string;
+}
 
+export interface WorkspaceGraphResponse {
+  workspace: Workspace;
+  nodes: GraphNodePayload[];
+  edges: GraphEdgePayload[];
+}
