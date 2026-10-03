@@ -67,6 +67,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - INTERNAL_BACKEND_URL=http://backend:8000
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
     image: workspace-frontend
     container_name: workspace_prod_frontend
     restart: always
@@ -77,7 +80,7 @@ services:
       NODE_ENV: production
       INTERNAL_BACKEND_URL: http://backend:8000
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
 

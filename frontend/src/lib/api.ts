@@ -25,10 +25,42 @@ import {
   BreakdownSuggestion,
 } from '@/types/workspace';
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  (typeof window !== 'undefined' ? '/api' : 'http://localhost:8000/api');
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const clientUrl =
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      '/api';
+    const trimmed = clientUrl.replace(/\/+$/, '');
+    return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+  }
+
+  const serverUrl =
+    process.env.INTERNAL_BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    'http://127.0.0.1:8000';
+  const trimmed = serverUrl.replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+}
+
+export const API_BASE_URL = getApiBaseUrl();
+
+export function buildApiUrl(endpoint: string): URL {
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const base = getApiBaseUrl();
+  const full = `${base}${cleanEndpoint}`;
+
+  if (full.startsWith('http://') || full.startsWith('https://')) {
+    return new URL(full);
+  }
+
+  const origin =
+    typeof window !== 'undefined'
+      ? window.location.origin
+      : (process.env.INTERNAL_BACKEND_URL || 'http://127.0.0.1:8000');
+
+  return new URL(full, origin);
+}
 
 async function handleResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type') || '';
@@ -78,7 +110,7 @@ export async function fetchNodes(
   workspaceId: string,
   parentId?: string | null
 ): Promise<WorkspaceNode[]> {
-  const url = new URL(`${API_BASE_URL}/nodes/`);
+  const url = buildApiUrl('/nodes/');
   url.searchParams.set('workspace_id', workspaceId);
   if (parentId !== undefined) {
     url.searchParams.set('parent_id', parentId === null ? 'null' : parentId);
@@ -123,7 +155,7 @@ export async function updateNode(
 }
 
 export async function fetchShots(sceneId?: string): Promise<Shot[]> {
-  const url = new URL(`${API_BASE_URL}/shots/`);
+  const url = buildApiUrl('/shots/');
   if (sceneId) {
     url.searchParams.set('scene_id', sceneId);
   }
@@ -134,7 +166,7 @@ export async function fetchShots(sceneId?: string): Promise<Shot[]> {
 }
 
 export async function fetchCharacters(workspaceId?: string): Promise<Character[]> {
-  const url = new URL(`${API_BASE_URL}/characters/`);
+  const url = buildApiUrl('/characters/');
   if (workspaceId) {
     url.searchParams.set('workspace_id', workspaceId);
   }
@@ -228,7 +260,7 @@ export async function searchWorkspaceNodes(
   workspaceId: string,
   query: string
 ): Promise<WorkspaceNode[]> {
-  const url = new URL(`${API_BASE_URL}/nodes/search/`);
+  const url = buildApiUrl('/nodes/search/');
   url.searchParams.set('q', query);
   url.searchParams.set('workspace_id', workspaceId);
   const res = await fetch(url.toString(), {
@@ -241,7 +273,7 @@ export async function fetchBreakdownElements(
   workspaceId?: string,
   category?: string
 ): Promise<BreakdownElement[]> {
-  const url = new URL(`${API_BASE_URL}/breakdown-elements/`);
+  const url = buildApiUrl('/breakdown-elements/');
   if (workspaceId) url.searchParams.set('workspace_id', workspaceId);
   if (category) url.searchParams.set('category', category);
   const res = await fetch(url.toString(), { cache: 'no-store' });
@@ -296,7 +328,7 @@ export async function uploadShotImage(
 }
 
 export async function fetchSnapshots(documentId?: string): Promise<DocumentSnapshot[]> {
-  const url = new URL(`${API_BASE_URL}/snapshots/`);
+  const url = buildApiUrl('/snapshots/');
   if (documentId) {
     url.searchParams.set('document_node', documentId);
   }
@@ -340,7 +372,7 @@ export async function fetchSchedules(
   screenplayId?: string,
   workspaceId?: string
 ): Promise<ShootingSchedule[]> {
-  const url = new URL(`${API_BASE_URL}/schedules/`);
+  const url = buildApiUrl('/schedules/');
   if (screenplayId) url.searchParams.set('screenplay', screenplayId);
   if (workspaceId) url.searchParams.set('workspace', workspaceId);
   const res = await fetch(url.toString(), { cache: 'no-store' });
@@ -383,7 +415,7 @@ export async function deleteSchedule(id: string): Promise<void> {
 }
 
 export async function fetchShootingDays(scheduleId: string): Promise<ShootingDay[]> {
-  const url = new URL(`${API_BASE_URL}/shooting-days/`);
+  const url = buildApiUrl('/shooting-days/');
   url.searchParams.set('schedule', scheduleId);
   const res = await fetch(url.toString(), { cache: 'no-store' });
   return handleResponse<ShootingDay[]>(res);
@@ -426,7 +458,7 @@ export async function fetchStripboardItems(
   scheduleId: string,
   shootingDayId?: string | null
 ): Promise<StripboardItem[]> {
-  const url = new URL(`${API_BASE_URL}/stripboard-items/`);
+  const url = buildApiUrl('/stripboard-items/');
   url.searchParams.set('schedule', scheduleId);
   if (shootingDayId !== undefined) {
     url.searchParams.set('shooting_day', shootingDayId === null ? 'null' : shootingDayId);
@@ -491,7 +523,7 @@ export async function fetchScriptNotes(
   workspaceId?: string,
   category?: string
 ): Promise<ScriptNote[]> {
-  const url = new URL(`${API_BASE_URL}/notes/`);
+  const url = buildApiUrl('/notes/');
   if (nodeId) url.searchParams.set('node', nodeId);
   if (workspaceId) url.searchParams.set('workspace', workspaceId);
   if (category) url.searchParams.set('category', category);
@@ -533,7 +565,7 @@ export async function deleteScriptNote(noteId: string): Promise<void> {
 // -------------------------------------------------------------
 
 export async function fetchTakesForShot(shotId: string): Promise<ProductionTake[]> {
-  const url = new URL(`${API_BASE_URL}/takes/`);
+  const url = buildApiUrl('/takes/');
   url.searchParams.set('shot', shotId);
   const res = await fetch(url.toString(), { cache: 'no-store' });
   return handleResponse<ProductionTake[]>(res);
@@ -590,7 +622,7 @@ export async function fetchADRCues(params?: {
   status?: string;
   dialogue_node?: string;
 }): Promise<ADRCue[]> {
-  const url = new URL(`${API_BASE_URL}/adr-cues/`);
+  const url = buildApiUrl('/adr-cues/');
   if (params?.workspace) url.searchParams.set('workspace', params.workspace);
   if (params?.character) url.searchParams.set('character', params.character);
   if (params?.status) url.searchParams.set('status', params.status);
@@ -649,7 +681,7 @@ export async function fetchAudioSpottingCues(params?: {
   scene?: string;
   cue_type?: string;
 }): Promise<AudioSpottingCue[]> {
-  const url = new URL(`${API_BASE_URL}/audio-cues/`);
+  const url = buildApiUrl('/audio-cues/');
   if (params?.workspace) url.searchParams.set('workspace', params.workspace);
   if (params?.scene) url.searchParams.set('scene', params.scene);
   if (params?.cue_type) url.searchParams.set('cue_type', params.cue_type);
@@ -695,7 +727,7 @@ export async function deleteAudioSpottingCue(cueId: string): Promise<void> {
 // -------------------------------------------------------------
 
 export async function fetchBudgets(screenplayId?: string, workspaceId?: string): Promise<ProductionBudget[]> {
-  const url = new URL(`${API_BASE_URL}/budgets/`);
+  const url = buildApiUrl('/budgets/');
   if (screenplayId) url.searchParams.set('screenplay', screenplayId);
   if (workspaceId) url.searchParams.set('workspace', workspaceId);
   const res = await fetch(url.toString(), { cache: 'no-store' });
@@ -808,7 +840,7 @@ export async function fetchMilestones(params?: {
   workspace?: string;
   phase?: string;
 }): Promise<ProductionMilestone[]> {
-  const url = new URL(`${API_BASE_URL}/milestones/`);
+  const url = buildApiUrl('/milestones/');
   if (params?.screenplay) url.searchParams.set('screenplay', params.screenplay);
   if (params?.workspace) url.searchParams.set('workspace', params.workspace);
   if (params?.phase) url.searchParams.set('phase', params.phase);
@@ -865,7 +897,7 @@ export async function fetchMemberships(
   workspaceId: string,
   role?: string
 ): Promise<WorkspaceMembership[]> {
-  const url = new URL(`${API_BASE_URL}/memberships/`);
+  const url = buildApiUrl('/memberships/');
   url.searchParams.set('workspace', workspaceId);
   if (role) url.searchParams.set('role', role);
   const res = await fetch(url.toString(), { cache: 'no-store' });
@@ -913,7 +945,7 @@ export async function fetchCurrentUserRole(
   capabilities: RoleCapabilities;
   membership?: WorkspaceMembership | null;
 }> {
-  const url = new URL(`${API_BASE_URL}/memberships/current_user_role/`);
+  const url = buildApiUrl('/memberships/current_user_role/');
   url.searchParams.set('workspace', workspaceId);
   if (email) url.searchParams.set('email', email);
   const res = await fetch(url.toString(), { cache: 'no-store' });
@@ -945,7 +977,7 @@ export async function fetchActivityLogs(
   department?: string,
   actionType?: string
 ): Promise<StudioActivityLog[]> {
-  const url = new URL(`${API_BASE_URL}/activity-logs/`);
+  const url = buildApiUrl('/activity-logs/');
   url.searchParams.set('workspace', workspaceId);
   if (department && department !== 'ALL') {
     url.searchParams.set('department', department);
@@ -976,7 +1008,7 @@ export async function fetchCoverageReports(
   screenplayId: string,
   workspaceId?: string
 ): Promise<ScriptCoverageReport[]> {
-  const url = new URL(`${API_BASE_URL}/coverage-reports/`);
+  const url = buildApiUrl('/coverage-reports/');
   url.searchParams.set('screenplay', screenplayId);
   if (workspaceId) url.searchParams.set('workspace', workspaceId);
   const res = await fetch(url.toString(), { cache: 'no-store' });
