@@ -19,16 +19,28 @@ import {
   deleteGraphNode,
   createGraphEdge,
   deleteGraphEdge,
+  fetchWorkspaceEntities,
+  syncWorkspaceEntities,
 } from './api';
-import type { GraphNodeData, GraphNodePayload, GraphEdgePayload } from '@/types/workspace';
+import type {
+  GraphNodeData,
+  GraphNodePayload,
+  GraphEdgePayload,
+  WorkspaceEntity,
+  ViewportState,
+} from '@/types/workspace';
 
 export type FlowNode = Node<GraphNodeData>;
 export type FlowEdge = Edge;
 
 export interface GraphStoreState {
   workspaceId: string | null;
+  entities: WorkspaceEntity[];
   nodes: FlowNode[];
   edges: FlowEdge[];
+  viewport: ViewportState;
+  activeTab: 'graph' | 'document';
+  focusedNodeId: string | null;
   isLoading: boolean;
   isSyncing: boolean;
   syncStatus: 'idle' | 'saving' | 'saved' | 'error';
@@ -41,25 +53,40 @@ export interface GraphStoreState {
   onNodesChange: OnNodesChange<FlowNode>;
   onEdgesChange: OnEdgesChange<FlowEdge>;
   onConnect: OnConnect;
+  onViewportChange: (viewport: ViewportState) => void;
+
+  // Model C Bi-Directional Actions
+  updateEntity: (id: string, patch: Partial<WorkspaceEntity>) => void;
+  updateNodeData: (nodeId: string, patch: Record<string, unknown>) => void;
+  focusNodeOnGraph: (nodeIdOrEntityId: string) => void;
+  setActiveTab: (tab: 'graph' | 'document') => void;
+  setFocusedNodeId: (nodeId: string | null) => void;
 
   // Graph Persistence Actions
   loadGraph: (workspaceId: string) => Promise<void>;
   syncGraph: (workspaceId?: string) => Promise<void>;
   debouncedSyncGraph: (workspaceId?: string) => void;
+  syncEntities: (workspaceId?: string) => Promise<void>;
+  debouncedSyncEntities: (workspaceId?: string) => void;
+
   addNode: (categoryOrData?: string | Partial<FlowNode>, position?: { x: number; y: number }) => Promise<FlowNode | null>;
   deleteNode: (nodeId: string) => Promise<void>;
   deleteEdge: (edgeId: string) => Promise<void>;
-  updateNodeData: (nodeId: string, partialData: Partial<GraphNodeData>) => void;
   toggleNodeCollapse: (nodeId: string) => void;
   setWorkspaceId: (workspaceId: string) => void;
 }
 
-let syncTimeout: ReturnType<typeof setTimeout> | null = null;
+let syncGraphTimeout: ReturnType<typeof setTimeout> | null = null;
+let syncEntitiesTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export const useGraphStore = create<GraphStoreState>((set, get) => ({
   workspaceId: null,
+  entities: [],
   nodes: [],
   edges: [],
+  viewport: { x: 0, y: 0, zoom: 1 },
+  activeTab: 'graph',
+  focusedNodeId: null,
   isLoading: false,
   isSyncing: false,
   syncStatus: 'idle',
@@ -67,6 +94,8 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
   error: null,
 
   setWorkspaceId: (workspaceId: string) => set({ workspaceId }),
+  setActiveTab: (activeTab: 'graph' | 'document') => set({ activeTab }),
+  setFocusedNodeId: (focusedNodeId: string | null) => set({ focusedNodeId }),
 
   setNodes: (nodesOrUpdater) => {
     set((state) => ({
@@ -84,7 +113,6 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
     const nextNodes = applyNodeChanges(changes, get().nodes) as FlowNode[];
     set({ nodes: nextNodes });
 
-    // Determine if changes warrant layout persistence (position, remove, add, etc.)
     const hasPositionOrStructureChange = changes.some(
       (c) => c.type === 'position' || c.type === 'remove' || c.type === 'add'
     );
@@ -131,21 +159,150 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
     }
   },
 
+  onViewportChange: (viewport: ViewportState) => {
+    set({ viewport });
+    get().debouncedSyncGraph();
+  },
+
+  // --------------------------------------------------------------------------
+  // Model C Bi-Directional Synchronization Actions
+  // --------------------------------------------------------------------------
+
+  updateEntity: (id: string, patch: Partial<WorkspaceEntity>) => {
+    const nextContent = patch.content;
+    const nextTitle = patch.title;
+
+    set((state) => {
+      // 1. Update canonical entity in entities array
+      const nextEntities = state.entities.map((ent) => {
+        if (ent.id === id) {
+          return { ...ent, ...patch };
+        }
+        return ent;
+      });
+
+      // 2. Automatically find linked node(s) and propagate content & title
+      const nextNodes = state.nodes.map((node) => {
+        if (node.data?.entityId === id) {
+          const updatedData: GraphNodeData = {
+            ...node.data,
+            ...(nextTitle !== undefined ? { title: nextTitle } : {}),
+            ...(nextContent !== undefined ? { content: nextContent, text: nextContent } : {}),
+            ...(patch.entityType !== undefined ? { entityType: patch.entityType } : {}),
+          };
+          return {
+            ...node,
+            data: updatedData,
+          };
+        }
+        return node;
+      });
+
+      return {
+        entities: nextEntities,
+        nodes: nextNodes,
+      };
+    });
+
+    get().debouncedSyncEntities();
+    get().debouncedSyncGraph();
+  },
+
+  updateNodeData: (nodeId: string, patch: Record<string, unknown>) => {
+    const targetNode = get().nodes.find((n) => n.id === nodeId);
+    const linkedEntityId = targetNode?.data?.entityId;
+
+    // 1. Update node data
+    set((state) => ({
+      nodes: state.nodes.map((node) => {
+        if (node.id === nodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              ...patch,
+            },
+          };
+        }
+        return node;
+      }),
+    }));
+
+    // 2. If node has linked entity, propagate text/content/title to entity
+    if (linkedEntityId) {
+      const content = patch.content ?? patch.text;
+      const title = patch.title;
+
+      if (content !== undefined || title !== undefined) {
+        set((state) => ({
+          entities: state.entities.map((ent) => {
+            if (ent.id === linkedEntityId) {
+              return {
+                ...ent,
+                ...(content !== undefined ? { content: String(content) } : {}),
+                ...(title !== undefined ? { title: String(title) } : {}),
+              };
+            }
+            return ent;
+          }),
+        }));
+        get().debouncedSyncEntities();
+      }
+    }
+
+    get().debouncedSyncGraph();
+  },
+
+  focusNodeOnGraph: (nodeIdOrEntityId: string) => {
+    const { nodes } = get();
+    const matchedNode = nodes.find(
+      (n) => n.id === nodeIdOrEntityId || n.data?.entityId === nodeIdOrEntityId
+    );
+    if (matchedNode) {
+      set({
+        activeTab: 'graph',
+        focusedNodeId: matchedNode.id,
+      });
+    } else {
+      set({ activeTab: 'graph' });
+    }
+  },
+
+  // --------------------------------------------------------------------------
+  // Persistence & Data Loading
+  // --------------------------------------------------------------------------
+
   loadGraph: async (workspaceId: string) => {
     set({ isLoading: true, workspaceId, error: null });
     try {
-      const graphData = await fetchWorkspaceGraph(workspaceId);
+      const [graphData, entitiesData] = await Promise.all([
+        fetchWorkspaceGraph(workspaceId),
+        fetchWorkspaceEntities(workspaceId).catch(() => []),
+      ]);
+
+      const canonicalEntities = entitiesData.length > 0 ? entitiesData : ((graphData.entities || []) as unknown as WorkspaceEntity[]);
+
+      const loadedViewport =
+        graphData.viewport_state ||
+        graphData.workspace?.viewport_state || { x: 100, y: 80, zoom: 0.9 };
 
       const flowNodes: FlowNode[] = (graphData.nodes || []).map((bn: GraphNodePayload) => {
         const posX = bn.position?.x ?? bn.position_x ?? 100;
         const posY = bn.position?.y ?? bn.position_y ?? 100;
+        const entityId = bn.entity || bn.entity_id || bn.data?.entityId || null;
+        const linkedEntity = entityId ? canonicalEntities.find((e) => e.id === entityId) : null;
+
         return {
           id: String(bn.id),
           type: bn.type || 'universalNode',
           position: { x: posX, y: posY },
           data: {
-            title: bn.title || 'Untitled Node',
+            title: linkedEntity?.title || bn.title || 'Untitled Node',
             category: bn.category || 'default',
+            entityId,
+            entityType: linkedEntity?.entityType || bn.entity_type || bn.data?.entityType || null,
+            content: linkedEntity?.content || bn.data?.content || bn.data?.text || '',
+            text: linkedEntity?.content || bn.data?.text || bn.data?.content || '',
             is_collapsed: Boolean(bn.is_collapsed),
             ...(bn.data || {}),
           },
@@ -164,8 +321,10 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
       }));
 
       set({
+        entities: canonicalEntities,
         nodes: flowNodes,
         edges: flowEdges,
+        viewport: loadedViewport,
         isLoading: false,
         syncStatus: 'saved',
         lastSyncedAt: new Date(),
@@ -177,12 +336,21 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
   },
 
   debouncedSyncGraph: (workspaceId?: string) => {
-    if (syncTimeout) {
-      clearTimeout(syncTimeout);
+    if (syncGraphTimeout) {
+      clearTimeout(syncGraphTimeout);
     }
     set({ syncStatus: 'saving' });
-    syncTimeout = setTimeout(() => {
+    syncGraphTimeout = setTimeout(() => {
       get().syncGraph(workspaceId);
+    }, 600);
+  },
+
+  debouncedSyncEntities: (workspaceId?: string) => {
+    if (syncEntitiesTimeout) {
+      clearTimeout(syncEntitiesTimeout);
+    }
+    syncEntitiesTimeout = setTimeout(() => {
+      get().syncEntities(workspaceId);
     }, 600);
   },
 
@@ -192,10 +360,12 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
 
     set({ isSyncing: true, syncStatus: 'saving' });
     try {
-      const { nodes, edges } = get();
+      const { nodes, edges, viewport } = get();
 
       const payloadNodes: GraphNodePayload[] = nodes.map((n) => ({
         id: n.id,
+        entity: n.data?.entityId || null,
+        entity_id: n.data?.entityId || null,
         type: n.type || 'universalNode',
         title: n.data?.title || 'Untitled Node',
         category: n.data?.category || 'default',
@@ -216,7 +386,11 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
         targetHandle: e.targetHandle || null,
       }));
 
-      await syncWorkspaceGraph(wsId, { nodes: payloadNodes, edges: payloadEdges });
+      await syncWorkspaceGraph(wsId, {
+        nodes: payloadNodes,
+        edges: payloadEdges,
+        viewport_state: viewport,
+      });
 
       set({
         isSyncing: false,
@@ -227,6 +401,18 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to sync graph';
       set({ isSyncing: false, syncStatus: 'error', error: msg });
+    }
+  },
+
+  syncEntities: async (workspaceIdOverride?: string) => {
+    const wsId = workspaceIdOverride || get().workspaceId;
+    if (!wsId) return;
+
+    try {
+      const { entities } = get();
+      await syncWorkspaceEntities(wsId, entities);
+    } catch (err: unknown) {
+      console.error('Failed to sync entities:', err);
     }
   },
 
@@ -302,7 +488,6 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
           is_collapsed: false,
         });
       } catch {
-        // Fallback to debounced sync if individual creation encounters error
         get().debouncedSyncGraph();
       }
     } else {
@@ -343,24 +528,6 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
     }
   },
 
-  updateNodeData: (nodeId: string, partialData: Partial<GraphNodeData>) => {
-    set((state) => ({
-      nodes: state.nodes.map((node) => {
-        if (node.id === nodeId) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              ...partialData,
-            },
-          };
-        }
-        return node;
-      }),
-    }));
-    get().debouncedSyncGraph();
-  },
-
   toggleNodeCollapse: (nodeId: string) => {
     const node = get().nodes.find((n) => n.id === nodeId);
     if (!node) return;
@@ -369,6 +536,5 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
   },
 }));
 
-// Re-export hook as default and named for flexibility
 export const useWorkspaceStore = useGraphStore;
 export default useGraphStore;

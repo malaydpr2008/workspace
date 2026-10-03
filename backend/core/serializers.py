@@ -23,6 +23,7 @@ from core.models import (
     ScriptCoverageReport,
     Node,
     Edge,
+    WorkspaceEntity,
 )
 
 
@@ -608,15 +609,40 @@ class ScriptCoverageReportSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "workspace_name", "screenplay_title", "created_at"]
 
 
+class WorkspaceEntitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkspaceEntity
+        fields = [
+            "id",
+            "workspace",
+            "entity_type",
+            "title",
+            "content",
+            "order_index",
+            "metadata",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
 class NodeSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(required=False)
     position = serializers.SerializerMethodField()
+    entity = serializers.PrimaryKeyRelatedField(
+        queryset=WorkspaceEntity.objects.all(), required=False, allow_null=True
+    )
+    entity_id = serializers.UUIDField(read_only=True)
+    entity_type = serializers.CharField(source="entity.entity_type", read_only=True)
 
     class Meta:
         model = Node
         fields = [
             "id",
             "workspace",
+            "entity",
+            "entity_id",
+            "entity_type",
             "type",
             "title",
             "category",
@@ -641,6 +667,8 @@ class NodeSerializer(serializers.ModelSerializer):
                 mutable_data["position_x"] = pos["x"]
             if "y" in pos:
                 mutable_data["position_y"] = pos["y"]
+        if "entity_id" in mutable_data and "entity" not in mutable_data:
+            mutable_data["entity"] = mutable_data["entity_id"]
         return super().to_internal_value(mutable_data)
 
 

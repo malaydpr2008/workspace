@@ -13,6 +13,7 @@ class Workspace(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
+    viewport_state = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -609,9 +610,45 @@ class ScriptCoverageReport(models.Model):
         return f"Coverage: {self.title} [{self.verdict}]"
 
 
+class WorkspaceEntity(models.Model):
+    ENTITY_TYPES = (
+        ("scene_heading", "Scene Heading"),
+        ("action", "Action"),
+        ("character", "Character"),
+        ("dialogue", "Dialogue"),
+        ("parenthetical", "Parenthetical"),
+        ("ai_prompt", "AI Prompt"),
+        ("storyboard", "Storyboard Frame"),
+        ("note", "Note"),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="entities")
+    entity_type = models.CharField(max_length=32, choices=ENTITY_TYPES, default="dialogue")
+    title = models.CharField(max_length=255, blank=True, default="")
+    content = models.TextField(blank=True, default="")
+    order_index = models.IntegerField(default=0, db_index=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["order_index", "created_at"]
+
+    def __str__(self):
+        return f"[{self.entity_type}] {self.title or self.content[:30]}"
+
+
 class Node(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="nodes")
+    entity = models.ForeignKey(
+        WorkspaceEntity,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="canvas_nodes",
+    )
     type = models.CharField(max_length=64, default="universalNode")
     title = models.CharField(max_length=128, default="Untitled Node")
     category = models.CharField(max_length=64, default="default")

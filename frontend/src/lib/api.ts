@@ -26,6 +26,8 @@ import {
   GraphNodePayload,
   GraphEdgePayload,
   WorkspaceGraphResponse,
+  WorkspaceEntity,
+  ViewportState,
 } from '@/types/workspace';
 
 export function getApiBaseUrl(): string {
@@ -1067,14 +1069,30 @@ export async function fetchWorkspaceGraph(workspaceId: string): Promise<Workspac
 
 export async function syncWorkspaceGraph(
   workspaceId: string,
-  payload: { nodes: GraphNodePayload[]; edges: GraphEdgePayload[] }
-): Promise<{ status: string; nodes: GraphNodePayload[]; edges: GraphEdgePayload[] }> {
+  payload: {
+    nodes: GraphNodePayload[];
+    edges: GraphEdgePayload[];
+    viewport_state?: ViewportState;
+  }
+): Promise<{
+  status: string;
+  nodes: GraphNodePayload[];
+  edges: GraphEdgePayload[];
+  entities?: Array<Record<string, unknown>>;
+  viewport_state?: ViewportState;
+}> {
   const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/graph/sync/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  return handleResponse<{ status: string; nodes: GraphNodePayload[]; edges: GraphEdgePayload[] }>(res);
+  return handleResponse<{
+    status: string;
+    nodes: GraphNodePayload[];
+    edges: GraphEdgePayload[];
+    entities?: Array<Record<string, unknown>>;
+    viewport_state?: ViewportState;
+  }>(res);
 }
 
 export async function createGraphNode(
@@ -1133,6 +1151,95 @@ export async function deleteGraphEdge(workspaceId: string, edgeId: string): Prom
     throw new Error(`Delete graph edge failed [${res.status}]: ${errorBody}`);
   }
 }
+
+// -------------------------------------------------------------
+// Model C Canonical Workspace Entities API
+// -------------------------------------------------------------
+
+export async function fetchWorkspaceEntities(workspaceId: string): Promise<WorkspaceEntity[]> {
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/entities/`, {
+    cache: 'no-store',
+  });
+  const data = await handleResponse<Array<Record<string, unknown>>>(res);
+  return data.map((e) => ({
+    id: String(e.id),
+    workspaceId: String(e.workspace || workspaceId),
+    entityType: (e.entity_type || 'dialogue') as WorkspaceEntity['entityType'],
+    title: String(e.title || ''),
+    content: String(e.content || ''),
+    orderIndex: Number(e.order_index ?? 0),
+    metadata: (e.metadata && typeof e.metadata === 'object' ? e.metadata : {}) as Record<string, unknown>,
+    createdAt: String(e.created_at || ''),
+    updatedAt: String(e.updated_at || ''),
+  }));
+}
+
+export async function syncWorkspaceEntities(
+  workspaceId: string,
+  entities: Partial<WorkspaceEntity>[]
+): Promise<{ status: string; entities: WorkspaceEntity[] }> {
+  const payloadEntities = entities.map((e, idx) => ({
+    id: e.id,
+    entity_type: e.entityType || 'dialogue',
+    title: e.title || '',
+    content: e.content || '',
+    order_index: e.orderIndex ?? idx,
+    metadata: e.metadata || {},
+  }));
+
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/entities/sync/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entities: payloadEntities }),
+  });
+  const data = await handleResponse<{ status: string; entities: Array<Record<string, unknown>> }>(res);
+  return {
+    status: data.status,
+    entities: (data.entities || []).map((e) => ({
+      id: String(e.id),
+      workspaceId: String(e.workspace || workspaceId),
+      entityType: (e.entity_type || 'dialogue') as WorkspaceEntity['entityType'],
+      title: String(e.title || ''),
+      content: String(e.content || ''),
+      orderIndex: Number(e.order_index ?? 0),
+      metadata: (e.metadata && typeof e.metadata === 'object' ? e.metadata : {}) as Record<string, unknown>,
+      createdAt: String(e.created_at || ''),
+      updatedAt: String(e.updated_at || ''),
+    })),
+  };
+}
+
+export async function updateWorkspaceEntity(
+  workspaceId: string,
+  entityId: string,
+  data: Partial<WorkspaceEntity>
+): Promise<WorkspaceEntity> {
+  const body: Record<string, unknown> = {};
+  if (data.title !== undefined) body.title = data.title;
+  if (data.content !== undefined) body.content = data.content;
+  if (data.entityType !== undefined) body.entity_type = data.entityType;
+  if (data.orderIndex !== undefined) body.order_index = data.orderIndex;
+  if (data.metadata !== undefined) body.metadata = data.metadata;
+
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/entities/${entityId}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const e = await handleResponse<Record<string, unknown>>(res);
+  return {
+    id: String(e.id),
+    workspaceId: String(e.workspace || workspaceId),
+    entityType: (e.entity_type || 'dialogue') as WorkspaceEntity['entityType'],
+    title: String(e.title || ''),
+    content: String(e.content || ''),
+    orderIndex: Number(e.order_index ?? 0),
+    metadata: (e.metadata && typeof e.metadata === 'object' ? e.metadata : {}) as Record<string, unknown>,
+    createdAt: String(e.created_at || ''),
+    updatedAt: String(e.updated_at || ''),
+  };
+}
+
 
 
 

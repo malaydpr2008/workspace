@@ -29,6 +29,7 @@ from core.models import (
     ScriptCoverageReport,
     Node,
     Edge,
+    WorkspaceEntity,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -54,6 +55,7 @@ from core.serializers import (
     ScriptCoverageReportSerializer,
     NodeSerializer,
     EdgeSerializer,
+    WorkspaceEntitySerializer,
 )
 from core.permissions import RolePermissionPolicy
 
@@ -62,15 +64,27 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
     queryset = Workspace.objects.all()
     serializer_class = WorkspaceSerializer
 
+    def retrieve(self, request, *args, **kwargs):
+        workspace = self.get_object()
+        data = WorkspaceSerializer(workspace).data
+        data["entities"] = WorkspaceEntitySerializer(workspace.entities.all(), many=True).data
+        data["nodes"] = NodeSerializer(workspace.nodes.all(), many=True).data
+        data["edges"] = EdgeSerializer(workspace.edges.all(), many=True).data
+        data["viewport_state"] = workspace.viewport_state or {}
+        return Response(data)
+
     @action(detail=True, methods=["get"], url_path="graph")
     def graph(self, request, pk=None):
         workspace = self.get_object()
         nodes = workspace.nodes.all()
         edges = workspace.edges.all()
+        entities = workspace.entities.all()
         return Response({
             "workspace": WorkspaceSerializer(workspace).data,
             "nodes": NodeSerializer(nodes, many=True).data,
             "edges": EdgeSerializer(edges, many=True).data,
+            "entities": WorkspaceEntitySerializer(entities, many=True).data,
+            "viewport_state": workspace.viewport_state or {},
         })
 
     @action(detail=True, methods=["post"], url_path="graph/sync")
@@ -78,16 +92,27 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
         workspace = self.get_object()
         nodes_data = request.data.get("nodes", [])
         edges_data = request.data.get("edges", [])
+        viewport_data = request.data.get("viewport_state") or request.data.get("viewport")
 
         with transaction.atomic():
+            if viewport_data is not None and isinstance(viewport_data, dict):
+                workspace.viewport_state = viewport_data
+                workspace.save(update_fields=["viewport_state"])
+
             synced_node_ids = set()
             for item in nodes_data:
                 node_id = item.get("id")
                 pos = item.get("position", {}) if isinstance(item.get("position"), dict) else {}
                 pos_x = item.get("position_x", pos.get("x", 100.0))
                 pos_y = item.get("position_y", pos.get("y", 100.0))
+                entity_id = item.get("entity") or item.get("entity_id") or item.get("entityId")
+                entity_obj = None
+                if entity_id:
+                    entity_obj = WorkspaceEntity.objects.filter(id=entity_id, workspace=workspace).first()
+
                 defaults = {
                     "workspace": workspace,
+                    "entity": entity_obj,
                     "type": item.get("type", "universalNode"),
                     "title": item.get("title", "Untitled Node"),
                     "category": item.get("category", "default"),
@@ -132,11 +157,78 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
 
         nodes = workspace.nodes.all()
         edges = workspace.edges.all()
+        entities = workspace.entities.all()
         return Response({
             "status": "synced",
             "nodes": NodeSerializer(nodes, many=True).data,
             "edges": EdgeSerializer(edges, many=True).data,
+            "entities": WorkspaceEntitySerializer(entities, many=True).data,
+            "viewport_state": workspace.viewport_state or {},
         })
+
+    @action(detail=True, methods=["post"], url_path="entities/sync")
+    def sync_entities(self, request, pk=None):
+        workspace = self.get_object()
+        entities_data = request.data.get("entities", [])
+        if not isinstance(entities_data, list):
+            return Response({"error": "Expected a list of entities"}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            synced_entity_ids = set()
+            for idx, item in enumerate(entities_data):
+                ent_id = item.get("id")
+                order_idx = item.get("order_index", item.get("orderIndex", idx))
+                defaults = {
+                    "workspace": workspace,
+                    "entity_type": item.get("entity_type", item.get("entityType", "dialogue")),
+                    "title": item.get("title", ""),
+                    "content": item.get("content", ""),
+                    "order_index": int(order_idx),
+                    "metadata": item.get("metadata", {}) if isinstance(item.get("metadata"), dict) else {},
+                }
+                if ent_id:
+                    ent_obj, _ = WorkspaceEntity.objects.update_or_create(id=ent_id, defaults=defaults)
+                else:
+                    ent_obj = WorkspaceEntity.objects.create(**defaults)
+                synced_entity_ids.add(str(ent_obj.id))
+
+            if request.data.get("delete_missing", False):
+                workspace.entities.exclude(id__in=synced_entity_ids).delete()
+
+        entities = workspace.entities.all()
+        return Response({
+            "status": "synced",
+            "entities": WorkspaceEntitySerializer(entities, many=True).data,
+        })
+
+    @action(detail=True, methods=["get", "post"], url_path="entities")
+    def workspace_entities_crud(self, request, pk=None):
+        workspace = self.get_object()
+        if request.method == "GET":
+            return Response(WorkspaceEntitySerializer(workspace.entities.all(), many=True).data)
+
+        elif request.method == "POST":
+            data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+            data["workspace"] = str(workspace.id)
+            serializer = WorkspaceEntitySerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["patch", "delete"], url_path=r"entities/(?P<entity_id>[^/.]+)")
+    def workspace_entity_detail(self, request, pk=None, entity_id=None):
+        workspace = self.get_object()
+        entity = WorkspaceEntity.objects.filter(id=entity_id, workspace=workspace).first()
+        if not entity:
+            return Response({"error": "Entity not found"}, status=status.HTTP_404_NOT_FOUND)
+        if request.method == "PATCH":
+            serializer = WorkspaceEntitySerializer(entity, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        elif request.method == "DELETE":
+            entity.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["get", "post", "patch", "delete"], url_path="nodes")
     def workspace_nodes_crud(self, request, pk=None):

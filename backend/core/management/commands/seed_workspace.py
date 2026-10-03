@@ -1,5 +1,14 @@
 from django.core.management.base import BaseCommand
-from core.models import Workspace, WorkspaceNode, Character, Shot, ShotBlockCoverage, Node, Edge
+from core.models import (
+    Workspace,
+    WorkspaceNode,
+    Character,
+    Shot,
+    ShotBlockCoverage,
+    Node,
+    Edge,
+    WorkspaceEntity,
+)
 
 
 class Command(BaseCommand):
@@ -11,11 +20,12 @@ class Command(BaseCommand):
         # 1. Workspace
         workspace, created = Workspace.objects.get_or_create(
             slug="production-studio",
-            defaults={"name": "Production Studio"},
+            defaults={"name": "Production Studio", "viewport_state": {"x": 100, "y": 80, "zoom": 0.9}},
         )
         if not created:
             self.stdout.write("Workspace already exists, updating nodes...")
             # Clean up prior seed nodes for idempotency
+            workspace.entities.all().delete()
             workspace.workspace_nodes.all().delete()
             workspace.nodes.all().delete()
             workspace.characters.all().delete()
@@ -145,18 +155,52 @@ class Command(BaseCommand):
         )
         self.stdout.write(f"Created Article root node: {article.title}")
 
-        # 7. Infinite Visual Graph: Input -> Transform -> Output Nodes & Edges
+        # 7. Model C Canonical Workspace Entities
+        entity_heading = WorkspaceEntity.objects.create(
+            workspace=workspace,
+            entity_type="scene_heading",
+            title="SCENE 1",
+            content="INT. CYBERPUNK LAB - NIGHT",
+            order_index=0,
+            metadata={"location": "LAB", "setting": "INT", "time": "NIGHT"},
+        )
+
+        entity_action = WorkspaceEntity.objects.create(
+            workspace=workspace,
+            entity_type="action",
+            title="",
+            content="A bank of monitors flickers in the dim blue light.",
+            order_index=1,
+            metadata={},
+        )
+
+        entity_dialogue = WorkspaceEntity.objects.create(
+            workspace=workspace,
+            entity_type="dialogue",
+            title="ELENA",
+            content="The neural handshake is holding, but Daphne keeps dropping packets.",
+            order_index=2,
+            metadata={"character": "Elena", "parenthetical": "without looking away from the terminal"},
+        )
+        self.stdout.write("Created Model C canonical entities (scene_heading, action, dialogue)")
+
+        # 8. Infinite Visual Graph: Input (Linked to Entity 3) -> Transform -> Output
         node_input = Node.objects.create(
             workspace=workspace,
+            entity=entity_dialogue,
             type="universalNode",
             title="Screenplay Input",
             category="input",
             position_x=100.0,
             position_y=160.0,
             data={
-                "label": "Scene 1 Draft",
+                "entityId": str(entity_dialogue.id),
+                "entityType": entity_dialogue.entity_type,
+                "label": "Scene Dialogue",
+                "title": entity_dialogue.title,
+                "content": entity_dialogue.content,
+                "text": entity_dialogue.content,
                 "format": "Final Draft",
-                "text": "EXT. NEON ROOFTOP - NIGHT\nRain washes over the high-rise terrace as city holograms flicker into the mist.",
                 "inputs": [],
                 "outputs": [{"id": "out-text", "name": "Text Stream", "type": "string"}],
             },
@@ -164,6 +208,7 @@ class Command(BaseCommand):
 
         node_transform = Node.objects.create(
             workspace=workspace,
+            entity=None,
             type="universalNode",
             title="Dialogue Doctor AI",
             category="transform",
@@ -180,6 +225,7 @@ class Command(BaseCommand):
 
         node_output = Node.objects.create(
             workspace=workspace,
+            entity=None,
             type="universalNode",
             title="Production Storyboard",
             category="output",
@@ -212,7 +258,7 @@ class Command(BaseCommand):
             target_handle="in-processed",
         )
 
-        self.stdout.write(f"Created Graph nodes: {node_input.title} -> {node_transform.title} -> {node_output.title}")
+        self.stdout.write(f"Created Graph nodes: {node_input.title} (Linked to {entity_dialogue.id}) -> {node_transform.title} -> {node_output.title}")
         self.stdout.write(f"Created Graph edges: {edge1.id}, {edge2.id}")
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded workspace database."))

@@ -427,10 +427,40 @@ export interface BreakdownSuggestion {
   reason: string;
 }
 
+export interface WorkspaceEntity {
+  id: string;
+  workspaceId: string;
+  entityType:
+    | 'scene_heading'
+    | 'action'
+    | 'character'
+    | 'dialogue'
+    | 'parenthetical'
+    | 'ai_prompt'
+    | 'storyboard'
+    | 'note';
+  title: string;
+  content: string;
+  orderIndex: number;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ViewportState {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
 export interface GraphNodeData {
   label?: string;
   category?: 'input' | 'transform' | 'output' | 'default' | string;
   title?: string;
+  entityId?: string | null;
+  entityType?: string | null;
+  content?: string;
+  text?: string;
   inputs?: Array<{ id: string; name: string; type?: string }>;
   outputs?: Array<{ id: string; name: string; type?: string }>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -440,6 +470,9 @@ export interface GraphNodeData {
 export interface GraphNodePayload {
   id: string;
   workspace?: string;
+  entity?: string | null;
+  entity_id?: string | null;
+  entity_type?: string | null;
   type?: string;
   title?: string;
   category?: string;
@@ -465,7 +498,10 @@ export interface GraphEdgePayload {
 }
 
 export interface WorkspaceGraphResponse {
-  workspace: Workspace;
+  workspace: Workspace & { viewport_state?: ViewportState };
   nodes: GraphNodePayload[];
   edges: GraphEdgePayload[];
+  entities?: Array<Record<string, unknown>>;
+  viewport_state?: ViewportState;
 }
+

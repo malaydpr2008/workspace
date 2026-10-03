@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -175,14 +175,44 @@ function GraphToolbar({ onAddNode }: { onAddNode: (category: string) => void }) 
 }
 
 function InnerGraphCanvas() {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode } = useGraphStore();
-  const { screenToFlowPosition } = useReactFlow();
+  const {
+    nodes,
+    edges,
+    viewport,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    onViewportChange,
+    addNode,
+    focusedNodeId,
+    setFocusedNodeId,
+  } = useGraphStore();
+  const { screenToFlowPosition, setViewport, setCenter } = useReactFlow();
+  const hasRestoredViewport = useRef(false);
 
   const nodeTypes = useMemo(() => ({ universalNode: UniversalNode }), []);
 
+  // Restore persisted viewport from Django on load
+  useEffect(() => {
+    if (!hasRestoredViewport.current && (viewport.x !== 0 || viewport.y !== 0 || viewport.zoom !== 1)) {
+      setViewport(viewport, { duration: 400 });
+      hasRestoredViewport.current = true;
+    }
+  }, [viewport, setViewport]);
+
+  // Focus on node if triggered from Document View
+  useEffect(() => {
+    if (focusedNodeId) {
+      const targetNode = nodes.find((n) => n.id === focusedNodeId);
+      if (targetNode) {
+        setCenter(targetNode.position.x + 150, targetNode.position.y + 100, { zoom: 1.2, duration: 800 });
+      }
+      setFocusedNodeId(null);
+    }
+  }, [focusedNodeId, nodes, setCenter, setFocusedNodeId]);
+
   const handleAddNodeFromCenter = useCallback(
     (category: string) => {
-      // Calculate center of screen or flow position
       const centerX = window.innerWidth ? window.innerWidth / 2 : 400;
       const centerY = window.innerHeight ? window.innerHeight / 2 : 300;
       let flowPos = { x: 300, y: 200 };
@@ -196,6 +226,13 @@ function InnerGraphCanvas() {
     [addNode, screenToFlowPosition]
   );
 
+  const handleMoveEnd = useCallback(
+    (_event: unknown, currentViewport: { x: number; y: number; zoom: number }) => {
+      onViewportChange(currentViewport);
+    },
+    [onViewportChange]
+  );
+
   return (
     <div className="w-full h-full relative select-none bg-slate-950">
       <ReactFlow
@@ -204,9 +241,10 @@ function InnerGraphCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onMoveEnd={handleMoveEnd}
+        defaultViewport={viewport}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
-        fitView
         minZoom={0.1}
         maxZoom={2.5}
         colorMode="dark"

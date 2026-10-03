@@ -147,11 +147,21 @@ export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, se
             </span>
           )}
 
-          <span
-            className={`text-[9px] font-mono px-1.5 py-0.2 rounded border uppercase shrink-0 font-bold ${config.badgeBg}`}
-          >
-            {config.label}
-          </span>
+          {data.entityId ? (
+            <span
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 font-bold uppercase shrink-0"
+              title={`Linked to canonical entity ID: ${data.entityId}`}
+            >
+              Linked Entity: {data.entityType || 'dialogue'}
+            </span>
+          ) : (
+            <span
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-slate-700 bg-slate-800/90 text-slate-400 font-medium uppercase shrink-0"
+              title="Operational or Transformation AI Node"
+            >
+              Operational / AI Node
+            </span>
+          )}
         </div>
 
         {/* Header Action Controls */}
@@ -220,88 +230,92 @@ export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, se
       {/* Collapsible Card Body */}
       {!isCollapsed && (
         <div className="p-3 space-y-3 text-xs text-slate-200">
-          {/* Input Node Form Controls */}
-          {category === 'input' && (
+          {/* If Linked to an Entity: Direct Text & Content Synchronization */}
+          {data.entityId ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[11px] text-slate-400">
-                <span>Script / Prompt Text</span>
-                <span className="font-mono text-[10px] text-emerald-400">RAW STREAM</span>
+                <span className="font-semibold text-emerald-300">
+                  {data.entityType === 'dialogue' ? 'Character Dialogue' : 'Entity Content'}
+                </span>
+                <span className="font-mono text-[10px] text-emerald-400">BI-DIRECTIONAL SYNC</span>
               </div>
-              <textarea
-                value={data.text ?? ''}
-                onChange={(e) => handleDataChange('text', e.target.value)}
-                placeholder="EXT. NEON ROOFTOP - NIGHT..."
-                rows={4}
-                className="nodrag nopan nowheel w-full bg-slate-950/80 border border-slate-700/80 rounded-lg p-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none transition-colors"
-              />
-              <div className="flex items-center justify-between text-[11px] pt-1">
-                <span className="text-slate-400">Format:</span>
-                <select
-                  value={data.format || 'Final Draft'}
-                  onChange={(e) => handleDataChange('format', e.target.value)}
-                  className="nodrag nopan bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="Final Draft">Final Draft (Fountain)</option>
-                  <option value="Standard Script">Standard Script</option>
-                  <option value="Storyboard Beats">Storyboard Beats</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Transform Node Form Controls */}
-          {category === 'transform' && (
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <label className="text-[11px] text-slate-400 flex justify-between">
-                  <span>AI Engine / Model</span>
-                  <span className="text-[10px] text-purple-400 font-mono">LLM</span>
-                </label>
-                <select
-                  value={data.model || 'gpt-4o-cinematic'}
-                  onChange={(e) => handleDataChange('model', e.target.value)}
-                  className="nodrag nopan w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
-                >
-                  <option value="gpt-4o-cinematic">GPT-4o (Cinematic Co-pilot)</option>
-                  <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Dialogue Doctor)</option>
-                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (Story Analyzer)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] text-slate-400 flex justify-between">
-                  <span>Punch-Up Tone</span>
-                  <span className="text-[10px] text-purple-400 font-mono">STYLE</span>
-                </label>
-                <select
-                  value={data.style || 'Punchier & Subtext-heavy'}
-                  onChange={(e) => handleDataChange('style', e.target.value)}
-                  className="nodrag nopan w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
-                >
-                  <option value="Punchier & Subtext-heavy">Punchier & Subtext-heavy</option>
-                  <option value="Cynical Noir">Cynical Noir</option>
-                  <option value="Urgent & Sparse">Urgent & Sparse</option>
-                  <option value="Naturalistic Mumblecore">Naturalistic Mumblecore</option>
-                </select>
-              </div>
-
-              <div className="pt-1 space-y-1">
-                <div className="flex justify-between text-[11px] text-slate-400">
-                  <span>Creativity (Temp):</span>
-                  <span className="font-mono text-purple-300 font-semibold">{data.temperature ?? 0.7}</span>
+              {data.title && (
+                <div className="text-[11px] font-mono text-slate-300 font-bold uppercase tracking-wider">
+                  Speaker: {data.title}
                 </div>
-                <input
-                  type="range"
-                  min="0.0"
-                  max="1.0"
-                  step="0.05"
-                  value={data.temperature ?? 0.7}
-                  onChange={(e) => handleDataChange('temperature', parseFloat(e.target.value))}
-                  className="nodrag nopan w-full accent-purple-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-                />
+              )}
+              <textarea
+                value={data.content ?? data.text ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleDataChange('content', val);
+                  handleDataChange('text', val);
+                }}
+                placeholder="Enter script text or dialogue..."
+                rows={4}
+                className="nodrag nopan nowheel w-full bg-slate-950/80 border border-emerald-500/40 focus:border-emerald-400 rounded-lg p-2 text-xs font-mono text-slate-100 placeholder-slate-600 focus:outline-none resize-none transition-colors"
+              />
+              <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                <span>Entity: {String(data.entityId).slice(0, 8)}...</span>
+                <span>Type: {data.entityType}</span>
               </div>
             </div>
-          )}
+          ) : (
+            /* Standalone Operational / Transformation Node */
+            <>
+              {/* Transform Node Form Controls */}
+              {category === 'transform' && (
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-slate-400 flex justify-between">
+                      <span>AI Engine / Model</span>
+                      <span className="text-[10px] text-purple-400 font-mono">LLM</span>
+                    </label>
+                    <select
+                      value={data.model || 'gpt-4o-cinematic'}
+                      onChange={(e) => handleDataChange('model', e.target.value)}
+                      className="nodrag nopan w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
+                    >
+                      <option value="gpt-4o-cinematic">GPT-4o (Cinematic Co-pilot)</option>
+                      <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Dialogue Doctor)</option>
+                      <option value="gemini-1.5-pro">Gemini 1.5 Pro (Story Analyzer)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-slate-400 flex justify-between">
+                      <span>Punch-Up Tone</span>
+                      <span className="text-[10px] text-purple-400 font-mono">STYLE</span>
+                    </label>
+                    <select
+                      value={data.style || 'Punchier & Subtext-heavy'}
+                      onChange={(e) => handleDataChange('style', e.target.value)}
+                      className="nodrag nopan w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
+                    >
+                      <option value="Punchier & Subtext-heavy">Punchier & Subtext-heavy</option>
+                      <option value="Cynical Noir">Cynical Noir</option>
+                      <option value="Urgent & Sparse">Urgent & Sparse</option>
+                      <option value="Naturalistic Mumblecore">Naturalistic Mumblecore</option>
+                    </select>
+                  </div>
+
+                  <div className="pt-1 space-y-1">
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Creativity (Temp):</span>
+                      <span className="font-mono text-purple-300 font-semibold">{data.temperature ?? 0.7}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.0"
+                      max="1.0"
+                      step="0.05"
+                      value={data.temperature ?? 0.7}
+                      onChange={(e) => handleDataChange('temperature', parseFloat(e.target.value))}
+                      className="nodrag nopan w-full accent-purple-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                    />
+                  </div>
+                </div>
+              )}
 
           {/* Output Node Form Controls */}
           {category === 'output' && (
@@ -355,6 +369,8 @@ export const UniversalNode: React.FC<NodeProps<FlowNode>> = memo(({ id, data, se
                 className="nodrag nopan nowheel w-full bg-slate-950/80 border border-slate-700/80 rounded-lg p-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none transition-colors"
               />
             </div>
+          )}
+            </>
           )}
         </div>
       )}

@@ -3,7 +3,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { WorkspaceSidebar } from './tree/WorkspaceSidebar';
-import { NodeDispatcher } from './NodeDispatcher';
 import { CommandPalette } from './navigation/CommandPalette';
 import { TeamManagementModal } from './team/TeamManagementModal';
 import { StudioActivityDrawer } from './activity/StudioActivityDrawer';
@@ -12,6 +11,7 @@ import '@xyflow/react/dist/style.css';
 import { AlertCircle, RefreshCw, X, Shield, Users, Activity, Network, FileText } from 'lucide-react';
 import { WorkspaceRole } from '@/types/workspace';
 import { createWorkspaceSocket, WorkspaceSocketClient } from '@/lib/websocket';
+import { StoryView } from './editors/StoryView';
 import { useGraphStore } from '@/lib/workspaceStore';
 
 interface WorkspaceShellProps {
@@ -68,7 +68,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'graph' | 'document'>('graph');
+  const { activeTab, setActiveTab } = useGraphStore();
   const socketClientRef = useRef<WorkspaceSocketClient | null>(null);
   const localUserIdRef = useRef<string>('usr-collab-lead');
 
@@ -253,9 +253,9 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
             {/* Canvas Mode Switcher: Infinite Visual Graph vs Flat Document View */}
             <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
               <button
-                onClick={() => setViewMode('graph')}
+                onClick={() => setActiveTab('graph')}
                 className={`flex items-center space-x-1 px-2.5 py-0.5 rounded text-[11px] font-mono transition-all ${
-                  viewMode === 'graph'
+                  activeTab === 'graph'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
@@ -265,9 +265,9 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
                 <span>Visual Graph</span>
               </button>
               <button
-                onClick={() => setViewMode('document')}
+                onClick={() => setActiveTab('document')}
                 className={`flex items-center space-x-1 px-2.5 py-0.5 rounded text-[11px] font-mono transition-all ${
-                  viewMode === 'document'
+                  activeTab === 'document'
                     ? 'bg-slate-800 text-white font-bold shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
@@ -302,7 +302,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
 
         {/* Central Canvas Workspace */}
         <div className="flex-1 min-h-0 relative w-full h-full overflow-hidden">
-          {viewMode === 'graph' ? <WorkspaceGraphCanvas /> : <NodeDispatcher />}
+          {activeTab === 'graph' ? <WorkspaceGraphCanvas /> : <StoryView />}
         </div>
       </main>
 

@@ -1,151 +1,181 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import {
   BookOpen,
-  Bookmark,
-  Clock,
-  BarChart3,
-  AlignLeft,
-  ChevronRight,
-  Sparkles,
+  Network,
   Plus,
   Trash2,
-  Check,
-  LayoutGrid,
+  ChevronUp,
+  ChevronDown,
+  Sparkles,
+  Clapperboard,
+  MessageSquare,
+  FileText,
+  Clock,
+  Layers,
+  CheckCircle2,
+  RefreshCw,
+  Download,
+  AlertCircle,
 } from 'lucide-react';
-import { WorkspaceNode } from '@/types/workspace';
-import { useWorkspaceStore } from '@/store/workspaceStore';
-import {
-  compileStoryToMarkdown,
-  downloadFile,
-  copyToClipboard,
-} from '@/lib/compiler';
-import { DocumentExportButton } from '@/components/export/DocumentExportButton';
-import { BeatBoardView } from '@/components/views/BeatBoardView';
+import { WorkspaceEntity, WorkspaceNode } from '@/types/workspace';
+import { useGraphStore, useWorkspaceStore } from '@/lib/workspaceStore';
 
-interface StoryViewProps {
-  node: WorkspaceNode;
+export interface StoryViewProps {
+  node?: WorkspaceNode;
 }
 
 export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
   const {
+    workspaceId,
+    entities,
     nodes,
-    childrenMap,
-    loadNodeChildren,
-    updateNodeContent,
-    updateNodeTitle,
-    insertBlock,
-    deleteNode,
-    selectNode,
-    saveStatus,
+    updateEntity,
+    focusNodeOnGraph,
+    syncStatus,
+    isSyncing,
+    lastSyncedAt,
+    syncEntities,
   } = useWorkspaceStore();
 
-  const isChapter = node.type === 'chapter';
-  const [viewMode, setViewMode] = useState<'editor' | 'board'>('editor');
+  // Sort entities canonically by orderIndex
+  const sortedEntities = useMemo(() => {
+    return [...entities].sort((a, b) => a.orderIndex - b.orderIndex);
+  }, [entities]);
 
-  const chapters: WorkspaceNode[] = useMemo(() => {
-    if (isChapter) return [node];
-    const childIds = childrenMap[node.id] || [];
-    return childIds
-      .map((cid) => nodes[cid])
-      .filter((n): n is WorkspaceNode => n?.type === 'chapter');
-  }, [isChapter, node, childrenMap, nodes]);
+  // Compute stats across entities
+  const wordCount = useMemo(() => {
+    return sortedEntities.reduce((acc, ent) => {
+      const text = `${ent.title || ''} ${ent.content || ''}`.trim();
+      if (!text) return acc;
+      return acc + text.split(/\s+/).length;
+    }, 0);
+  }, [sortedEntities]);
 
-  const [userSelectedChapterId, setUserSelectedChapterId] = useState<string | null>(null);
-  const inputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-
-  const activeChapterId = isChapter
-    ? node.id
-    : (userSelectedChapterId && chapters.some((c) => c.id === userSelectedChapterId)
-        ? userSelectedChapterId
-        : chapters[0]?.id) || '';
-
-  useEffect(() => {
-    if (activeChapterId && !childrenMap[activeChapterId]) {
-      loadNodeChildren(activeChapterId);
-    }
-  }, [activeChapterId, loadNodeChildren, childrenMap]);
-
-  const currentChapter = nodes[activeChapterId] || (isChapter ? node : null);
-  const paragraphs = currentChapter
-    ? (childrenMap[currentChapter.id] || [])
-        .map((cid) => nodes[cid])
-        .filter((n): n is WorkspaceNode => Boolean(n))
-    : [];
-
-  // Compute word count and reading time across paragraphs
-  const allText = paragraphs.map((p) => p.content || '').join(' ');
-  const wordCount = allText.trim() ? allText.trim().split(/\s+/).length : 0;
   const readingTimeMin = Math.max(1, Math.ceil(wordCount / 200));
 
-  const focusParagraph = (paraId: string) => {
-    setTimeout(() => {
-      inputRefs.current[paraId]?.focus();
-    }, 50);
-  };
+  const handleAddEntity = (entityType: WorkspaceEntity['entityType'] = 'action') => {
+    const wsId = workspaceId || 'production-studio';
+    const newId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `ent-${Date.now()}`;
+    const maxOrder =
+      sortedEntities.length > 0
+        ? Math.max(...sortedEntities.map((e) => e.orderIndex))
+        : -1;
 
-  const handleAddParagraph = async (afterId: string | null = null) => {
-    if (!currentChapter) return;
-    const newPara = await insertBlock(currentChapter.id, 'paragraph', afterId, '');
-    if (newPara) {
-      focusParagraph(newPara.id);
+    let defaultTitle = '';
+    let defaultContent = '';
+
+    if (entityType === 'scene_heading') {
+      defaultTitle = 'INT. NEW SCENE - DAY';
+      defaultContent = 'INT. NEW SCENE - DAY';
+    } else if (entityType === 'dialogue') {
+      defaultTitle = 'CHARACTER';
+      defaultContent = 'Type new spoken line here...';
+    } else if (entityType === 'action') {
+      defaultContent = 'Describe the action taking place on screen...';
+    } else if (entityType === 'note') {
+      defaultTitle = 'Production Note';
+      defaultContent = 'Add directorial note or context...';
     }
+
+    const newEntity: WorkspaceEntity = {
+      id: newId,
+      workspaceId: wsId,
+      entityType,
+      title: defaultTitle,
+      content: defaultContent,
+      orderIndex: maxOrder + 1,
+      metadata: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    useGraphStore.setState((state) => ({
+      entities: [...state.entities, newEntity],
+    }));
+    useGraphStore.getState().debouncedSyncEntities();
   };
 
-  const handleKeyDown = async (
-    e: React.KeyboardEvent<HTMLTextAreaElement>,
-    para: WorkspaceNode,
-    idx: number
-  ) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      await handleAddParagraph(para.id);
-    } else if (e.key === 'Backspace' && !para.content) {
-      e.preventDefault();
-      const prev = paragraphs[idx - 1];
-      await deleteNode(para.id);
-      if (prev) focusParagraph(prev.id);
-    }
+  const handleDeleteEntity = (id: string) => {
+    useGraphStore.setState((state) => ({
+      entities: state.entities.filter((e) => e.id !== id),
+      nodes: state.nodes.map((n) =>
+        n.data?.entityId === id
+          ? { ...n, data: { ...n.data, entityId: null, entityType: null } }
+          : n
+      ),
+    }));
+    useGraphStore.getState().debouncedSyncEntities();
+    useGraphStore.getState().debouncedSyncGraph();
   };
 
-  // Export handlers
+  const handleMoveEntity = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= sortedEntities.length) return;
+
+    const list = [...sortedEntities];
+    const temp = list[index];
+    list[index] = list[targetIndex];
+    list[targetIndex] = temp;
+
+    const updatedList = list.map((ent, idx) => ({
+      ...ent,
+      orderIndex: idx,
+    }));
+
+    useGraphStore.setState({ entities: updatedList });
+    useGraphStore.getState().debouncedSyncEntities();
+  };
+
   const handleExportMarkdown = () => {
-    const md = compileStoryToMarkdown(node, nodes, childrenMap);
-    const slug = (node.title || 'story').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    downloadFile(md, `${slug}.md`, 'text/markdown;charset=utf-8');
-  };
-
-  const handleExportText = () => {
-    const md = compileStoryToMarkdown(node, nodes, childrenMap);
-    const slug = (node.title || 'story').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    downloadFile(md, `${slug}.txt`, 'text/plain;charset=utf-8');
-  };
-
-  const handleCopyClipboard = async () => {
-    const md = compileStoryToMarkdown(node, nodes, childrenMap);
-    return await copyToClipboard(md);
+    let md = `# Screenplay Manuscript\n\n`;
+    for (const ent of sortedEntities) {
+      if (ent.entityType === 'scene_heading') {
+        md += `\n## ${ent.content || ent.title || 'SCENE HEADING'}\n\n`;
+      } else if (ent.entityType === 'dialogue') {
+        md += `\n**${ent.title || 'CHARACTER'}**\n${ent.content}\n\n`;
+      } else if (ent.entityType === 'action') {
+        md += `${ent.content}\n\n`;
+      } else if (ent.entityType === 'parenthetical') {
+        md += `*(${ent.content || ent.title})*\n\n`;
+      } else {
+        md += `> [${ent.entityType.toUpperCase()}] ${ent.title ? ent.title + ': ' : ''}${ent.content}\n\n`;
+      }
+    }
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `screenplay-manuscript.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
-      {/* Top Meta Header */}
-      <div className="h-14 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 flex items-center justify-between shrink-0">
+    <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden text-slate-100 font-sans">
+      {/* Top Header Bar */}
+      <div className="h-14 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 flex items-center justify-between shrink-0 z-10">
         <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20">
+          <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             <BookOpen className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-base font-semibold text-white tracking-tight">
-                {node.title || 'Untitled Story'}
+                {node?.title || 'Document View • Canonical Screenplay'}
               </h1>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                PROSE NOVEL
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                MODEL C CANONICAL
               </span>
             </div>
             <p className="text-xs text-slate-400 flex items-center space-x-2">
-              <span>{chapters.length} Chapter{chapters.length === 1 ? '' : 's'}</span>
+              <span>{sortedEntities.length} Canonical Entities</span>
               <span>•</span>
               <span className="flex items-center space-x-1">
                 <Clock className="w-3 h-3 text-amber-400" />
@@ -157,223 +187,335 @@ export const StoryView: React.FC<StoryViewProps> = ({ node }) => {
           </div>
         </div>
 
-        {/* Stats, Export & Save Status */}
+        {/* Sync Status & Action Bar */}
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-1.5 text-xs font-mono mr-2">
-            {saveStatus === 'saving' && (
+            {isSyncing || syncStatus === 'saving' ? (
               <span className="flex items-center space-x-1.5 text-amber-400">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                <span>Saving...</span>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Syncing...</span>
               </span>
-            )}
-            {saveStatus === 'saved' && (
+            ) : syncStatus === 'saved' ? (
               <span className="flex items-center space-x-1.5 text-emerald-400">
-                <Check className="w-3.5 h-3.5" />
-                <span>Saved</span>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Backend Synced</span>
+              </span>
+            ) : syncStatus === 'error' ? (
+              <span className="flex items-center space-x-1.5 text-rose-400">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Sync Error</span>
+              </span>
+            ) : (
+              <span className="text-slate-500 text-[11px]">
+                {lastSyncedAt ? `Synced ${lastSyncedAt.toLocaleTimeString()}` : 'Ready'}
               </span>
             )}
-            {saveStatus === 'idle' && (
-              <span className="text-slate-500 text-[11px]">Synced</span>
-            )}
           </div>
 
-          {/* Segmented View Mode Toggle */}
-          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
-            <button
-              onClick={() => setViewMode('editor')}
-              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
-                viewMode === 'editor'
-                  ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Manuscript</span>
-            </button>
-            <button
-              onClick={() => setViewMode('board')}
-              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
-                viewMode === 'board'
-                  ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Beat Board</span>
-            </button>
-          </div>
+          <button
+            onClick={() => syncEntities()}
+            className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+            title="Manual sync entities"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+          </button>
 
-          <div className="flex items-center space-x-3 text-xs bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
-            <div className="flex items-center space-x-1 text-violet-400 font-mono">
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span>Target: {node.properties?.target_words?.toLocaleString() || '80,000'} words</span>
-            </div>
-          </div>
-
-          {/* Document Compilation Export Dropdown */}
-          <DocumentExportButton
-            onExportPrimary={handleExportMarkdown}
-            primaryLabel="Export as Markdown"
-            primaryExtension=".md"
-            onExportPlainText={handleExportText}
-            onCopyClipboard={handleCopyClipboard}
-          />
+          <button
+            onClick={handleExportMarkdown}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-mono transition-colors"
+            title="Export manuscript as Markdown"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-400" />
+            <span>Export MD</span>
+          </button>
         </div>
       </div>
 
-      {/* Main Content Area: Beat Board View OR Manuscript Reader */}
-      {viewMode === 'board' ? (
-        <BeatBoardView
-          parentNode={node}
-          beats={chapters}
-          onOpenBeat={(chapterId) => {
-            setUserSelectedChapterId(chapterId);
-            setViewMode('editor');
-            selectNode(chapterId);
-          }}
-          beatTypeLabel="Chapter"
-        />
-      ) : (
-        <div className="flex-1 flex overflow-hidden">
-        {/* Chapter Outline Sidebar */}
-        <div className="w-64 border-r border-slate-800/80 bg-slate-950/60 p-4 space-y-1.5 shrink-0 overflow-y-auto">
-          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
-            <span>Table of Contents</span>
-            <Bookmark className="w-3.5 h-3.5 text-violet-400" />
+      {/* Main Manuscript Reader & Editor */}
+      <div className="flex-1 overflow-y-auto p-6 md:p-12 lg:p-16 bg-slate-950 flex justify-center">
+        <div className="max-w-3xl w-full space-y-6">
+          {/* Document Header Banner */}
+          <div className="text-center pb-6 border-b border-slate-800/60 space-y-2">
+            <span className="text-[11px] font-mono tracking-widest text-indigo-400 uppercase">
+              LINEAR SCREENPLAY CONTINUUM
+            </span>
+            <h2 className="text-2xl md:text-3xl font-serif text-slate-100 font-semibold tracking-wide">
+              {node?.title || 'Production Screenplay'}
+            </h2>
+            <p className="text-xs text-slate-400 max-w-lg mx-auto">
+              Linear sequence sorted by <code className="text-indigo-300 font-mono">order_index</code>. Edits synchronize reactively with linked cards on the Infinite Visual Graph.
+            </p>
+            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-indigo-500 to-transparent mx-auto mt-4" />
           </div>
 
-          {chapters.length === 0 ? (
-            <div className="px-2 text-xs text-slate-500">No chapters yet.</div>
-          ) : (
-            chapters.map((ch, idx) => (
+          {/* Quick Add Bar */}
+          <div className="flex items-center justify-between bg-slate-900/60 border border-slate-800/80 rounded-xl p-2.5 backdrop-blur px-4">
+            <span className="text-xs font-mono text-slate-400 flex items-center space-x-1.5">
+              <Plus className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Insert Entity:</span>
+            </span>
+            <div className="flex items-center space-x-2">
               <button
-                key={ch.id}
-                onClick={() => setUserSelectedChapterId(ch.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  activeChapterId === ch.id
-                    ? 'bg-violet-600/20 text-violet-200 border border-violet-500/40 shadow-sm'
-                    : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                }`}
+                onClick={() => handleAddEntity('scene_heading')}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-amber-950/40 hover:text-amber-300 hover:border-amber-500/40 border border-slate-700/60 text-[11px] font-mono text-slate-300 transition-colors"
               >
-                <div className="flex items-center space-x-2 truncate">
-                  <span className="font-mono text-slate-500">{idx + 1}.</span>
-                  <span className="truncate">{ch.title || `Chapter ${idx + 1}`}</span>
-                </div>
-                <ChevronRight className="w-3 h-3 text-slate-600 shrink-0 ml-1" />
+                + Scene Heading
               </button>
-            ))
-          )}
-        </div>
-
-        {/* Prose Reading & Editing Canvas */}
-        <div className="flex-1 overflow-y-auto p-8 lg:p-16 bg-slate-950 flex justify-center">
-          <div className="max-w-2xl w-full space-y-8">
-            {/* Story Title & Chapter Banner */}
-            <div className="text-center pb-8 border-b border-slate-800/60 space-y-2">
-              <span className="text-xs font-mono tracking-widest text-violet-400 uppercase">
-                {node.title}
-              </span>
-              {currentChapter ? (
-                <input
-                  type="text"
-                  value={currentChapter.title}
-                  onChange={(e) => updateNodeTitle(currentChapter.id, e.target.value)}
-                  placeholder="Chapter Title..."
-                  className="w-full text-center text-3xl font-serif text-slate-100 font-semibold tracking-normal bg-transparent focus:outline-none border-b border-transparent focus:border-violet-500/40 pb-1"
-                />
-              ) : (
-                <h2 className="text-3xl font-serif text-slate-100 font-semibold">Chapter 1</h2>
-              )}
-              <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-violet-500 to-transparent mx-auto mt-4" />
+              <button
+                onClick={() => handleAddEntity('action')}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-emerald-950/40 hover:text-emerald-300 hover:border-emerald-500/40 border border-slate-700/60 text-[11px] font-mono text-slate-300 transition-colors"
+              >
+                + Action
+              </button>
+              <button
+                onClick={() => handleAddEntity('dialogue')}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-indigo-950/40 hover:text-indigo-300 hover:border-indigo-500/40 border border-slate-700/60 text-[11px] font-mono text-slate-300 transition-colors"
+              >
+                + Dialogue
+              </button>
+              <button
+                onClick={() => handleAddEntity('note')}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-purple-950/40 hover:text-purple-300 hover:border-purple-500/40 border border-slate-700/60 text-[11px] font-mono text-slate-300 transition-colors"
+              >
+                + Note
+              </button>
             </div>
+          </div>
 
-            {/* Paragraph Blocks */}
-            <div className="space-y-6 text-slate-300 font-serif text-lg leading-relaxed antialiased">
-              {paragraphs.length === 0 ? (
-                <div className="p-12 text-center border border-dashed border-slate-800 rounded-xl text-slate-500 font-sans text-xs space-y-3">
-                  <AlignLeft className="w-6 h-6 mx-auto mb-2 text-slate-600" />
-                  <p>No paragraphs in this chapter yet.</p>
-                  <button
-                    onClick={() => handleAddParagraph(null)}
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded text-xs font-sans font-medium"
+          {/* Canonical Entities Dynamic List */}
+          {sortedEntities.length === 0 ? (
+            <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/30 text-slate-400 space-y-4">
+              <Layers className="w-8 h-8 mx-auto text-slate-600" />
+              <div>
+                <p className="text-sm font-semibold text-slate-200">No entities in canonical store</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Create an entity or load the seeded cyberpunk screenplay from Django.
+                </p>
+              </div>
+              <div className="flex justify-center space-x-3 pt-2">
+                <button
+                  onClick={() => handleAddEntity('scene_heading')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg transition-all flex items-center space-x-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add First Scene</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {sortedEntities.map((entity, idx) => {
+                const linkedNode = nodes.find(
+                  (n) => n.data?.entityId === entity.id || n.id === entity.id
+                );
+
+                return (
+                  <div
+                    key={entity.id}
+                    className="group relative bg-slate-900/70 border border-slate-800/90 hover:border-indigo-500/50 rounded-xl p-5 transition-all shadow-sm hover:shadow-md"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add First Paragraph</span>
-                  </button>
-                </div>
-              ) : (
-                paragraphs.map((para, idx) => (
-                  <div key={para.id} className="group relative -mx-4 p-4 rounded-xl hover:bg-slate-900/40 transition-all">
-                    {/* Delete and quick action buttons */}
-                    <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1 font-sans">
-                      <button
-                        onClick={() => handleAddParagraph(para.id)}
-                        className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
-                        title="Insert paragraph below"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => deleteNode(para.id)}
-                        className="p-1 rounded bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-500"
-                        title="Delete paragraph"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {/* Block Header: Type Badge, Linked Node Indicator, Reordering, and Focus Button */}
+                    <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-slate-800/60">
+                      <div className="flex items-center space-x-2.5 flex-wrap gap-y-1">
+                        {/* Entity Type Badge */}
+                        {entity.entityType === 'scene_heading' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center space-x-1">
+                            <Clapperboard className="w-3 h-3 text-amber-400" />
+                            <span>Scene Heading</span>
+                          </span>
+                        )}
+                        {entity.entityType === 'action' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
+                            <FileText className="w-3 h-3 text-emerald-400" />
+                            <span>Action</span>
+                          </span>
+                        )}
+                        {entity.entityType === 'dialogue' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1">
+                            <MessageSquare className="w-3 h-3 text-indigo-400" />
+                            <span>Dialogue</span>
+                          </span>
+                        )}
+                        {entity.entityType === 'note' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center space-x-1">
+                            <Sparkles className="w-3 h-3 text-purple-400" />
+                            <span>Production Note</span>
+                          </span>
+                        )}
+                        {entity.entityType !== 'scene_heading' &&
+                          entity.entityType !== 'action' &&
+                          entity.entityType !== 'dialogue' &&
+                          entity.entityType !== 'note' && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-slate-800 text-slate-300 border border-slate-700">
+                              {entity.entityType}
+                            </span>
+                          )}
 
-                    <textarea
-                      ref={(el) => {
-                        inputRefs.current[para.id] = el;
-                      }}
-                      value={para.content}
-                      onChange={(e) => updateNodeContent(para.id, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(e, para, idx)}
-                      placeholder="Write your story prose here..."
-                      rows={Math.max(2, para.content.split('\n').length)}
-                      className="w-full bg-transparent resize-none font-serif text-lg leading-relaxed text-slate-200 focus:outline-none placeholder-slate-600"
-                    />
+                        {/* Order Index */}
+                        <span className="text-[11px] font-mono text-slate-500">
+                          #{entity.orderIndex}
+                        </span>
 
-                    {/* Quick "+" insertion line between paragraphs on hover */}
-                    <div className="relative h-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-slate-800" />
+                        {/* Linked Node Badge */}
+                        {linkedNode ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-950/60 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                            <span>Canvas Node: {linkedNode.data?.title || linkedNode.id.slice(0, 8)}</span>
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-500 border border-slate-800">
+                            Unlinked Card
+                          </span>
+                        )}
                       </div>
-                      <div className="relative flex justify-center">
+
+                      {/* Right Actions: Focus on Graph Canvas + Reorder + Delete */}
+                      <div className="flex items-center space-x-1.5">
+                        {/* Focus on Graph Canvas Button */}
                         <button
-                          onClick={() => handleAddParagraph(para.id)}
-                          className="px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-[10px] font-sans text-slate-400 hover:text-violet-300 hover:border-violet-500 flex items-center space-x-1"
+                          onClick={() => focusNodeOnGraph(entity.id)}
+                          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 hover:border-indigo-400 text-xs font-mono transition-all shadow-sm"
+                          title="Switch to Visual Graph and pan directly to linked node"
                         >
-                          <Plus className="w-2.5 h-2.5" />
-                          <span>Insert Paragraph</span>
+                          <Network className="w-3.5 h-3.5 text-indigo-300" />
+                          <span>Focus on Graph Canvas</span>
+                        </button>
+
+                        {/* Reorder Buttons */}
+                        <button
+                          onClick={() => handleMoveEntity(idx, 'up')}
+                          disabled={idx === 0}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          title="Move entity up"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveEntity(idx, 'down')}
+                          disabled={idx === sortedEntities.length - 1}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          title="Move entity down"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Delete Button */}
+                        <button
+                          onClick={() => handleDeleteEntity(entity.id)}
+                          className="p-1 rounded bg-slate-800 hover:bg-rose-950/60 hover:text-rose-400 text-slate-500 transition-colors"
+                          title="Delete entity"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
 
-            {/* Chapter Footer / Progress */}
-            {paragraphs.length > 0 && (
-              <div className="pt-8 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500 font-sans">
-                <span className="flex items-center space-x-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                  <span>End of Chapter</span>
-                </span>
-                <button
-                  onClick={() => handleAddParagraph(paragraphs[paragraphs.length - 1]?.id)}
-                  className="flex items-center space-x-1 px-3 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-violet-300 transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Add Paragraph</span>
-                </button>
-              </div>
-            )}
-          </div>
+                    {/* Entity Content: Tailored Screenplay Formatting & Inline Editing */}
+                    {entity.entityType === 'dialogue' ? (
+                      <div className="space-y-2">
+                        {/* Speaker Name Input */}
+                        <div className="flex justify-center">
+                          <input
+                            type="text"
+                            value={entity.title}
+                            onChange={(e) =>
+                              updateEntity(entity.id, { title: e.target.value.toUpperCase() })
+                            }
+                            placeholder="CHARACTER NAME"
+                            className="text-center font-mono font-bold text-sm tracking-wider text-indigo-300 bg-transparent border-b border-indigo-500/30 focus:border-indigo-400 focus:outline-none px-3 py-0.5 uppercase transition-colors"
+                          />
+                        </div>
+
+                        {/* Spoken Dialogue Textarea */}
+                        <div className="max-w-xl mx-auto">
+                          <textarea
+                            value={entity.content}
+                            onChange={(e) =>
+                              updateEntity(entity.id, { content: e.target.value })
+                            }
+                            placeholder="Type dialogue lines..."
+                            rows={Math.max(2, entity.content.split('\n').length)}
+                            className="w-full bg-slate-950/40 border border-slate-800/80 rounded-lg p-3 font-serif text-base text-slate-100 focus:outline-none focus:border-indigo-500/60 resize-none transition-all"
+                          />
+                        </div>
+                      </div>
+                    ) : entity.entityType === 'scene_heading' ? (
+                      <div>
+                        <input
+                          type="text"
+                          value={entity.title || entity.content}
+                          onChange={(e) =>
+                            updateEntity(entity.id, {
+                              title: e.target.value.toUpperCase(),
+                              content: e.target.value.toUpperCase(),
+                            })
+                          }
+                          placeholder="INT. CYBERPUNK LAB - NIGHT"
+                          className="w-full bg-slate-950/60 border border-amber-500/30 rounded-lg px-3.5 py-2 font-mono font-bold text-sm text-amber-300 focus:outline-none focus:border-amber-400 uppercase tracking-wide transition-colors"
+                        />
+                      </div>
+                    ) : entity.entityType === 'action' ? (
+                      <div>
+                        <textarea
+                          value={entity.content}
+                          onChange={(e) =>
+                            updateEntity(entity.id, { content: e.target.value })
+                          }
+                          placeholder="Action description..."
+                          rows={Math.max(2, entity.content.split('\n').length)}
+                          className="w-full bg-slate-950/40 border border-slate-800/80 rounded-lg p-3 font-serif text-base text-slate-200 leading-relaxed focus:outline-none focus:border-emerald-500/60 resize-none transition-all"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {entity.title && (
+                          <input
+                            type="text"
+                            value={entity.title}
+                            onChange={(e) =>
+                              updateEntity(entity.id, { title: e.target.value })
+                            }
+                            placeholder="Title..."
+                            className="w-full bg-slate-950/40 border border-slate-800/80 rounded px-2.5 py-1 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500"
+                          />
+                        )}
+                        <textarea
+                          value={entity.content}
+                          onChange={(e) =>
+                            updateEntity(entity.id, { content: e.target.value })
+                          }
+                          placeholder="Content..."
+                          rows={Math.max(2, entity.content.split('\n').length)}
+                          className="w-full bg-slate-950/40 border border-slate-800/80 rounded-lg p-2.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 resize-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Bottom Insertion Bar */}
+          {sortedEntities.length > 0 && (
+            <div className="pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500 font-mono">
+              <span className="flex items-center space-x-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                <span>End of Manuscript Continuum</span>
+              </span>
+              <button
+                onClick={() => handleAddEntity('dialogue')}
+                className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-indigo-300 hover:text-indigo-200 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Add Dialogue Block</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
-      )}
     </div>
   );
 };
+
+export default StoryView;
