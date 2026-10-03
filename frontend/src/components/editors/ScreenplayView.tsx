@@ -23,6 +23,7 @@ import {
   MessageSquare,
   Mic,
   Music,
+  DollarSign,
 } from 'lucide-react';
 import { WorkspaceNode, Shot, RevisionColor } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -51,6 +52,7 @@ import { TakeLoggerModal } from '@/components/storyboard/TakeLoggerModal';
 import { ADRCueModal } from '@/components/audio/ADRCueModal';
 import { ADRRecordingSheetView } from '@/components/audio/ADRRecordingSheetView';
 import { AudioSpottingDrawer } from '@/components/audio/AudioSpottingDrawer';
+import { ProductionBudgetView } from '@/components/budget/ProductionBudgetView';
 import { exportProductionBibleZip } from '@/lib/productionBible';
 import {
   getRevisionConfig,
@@ -98,7 +100,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [userSelectedSceneId, setUserSelectedSceneId] = useState<string | null>(null);
   const [isReelOpen, setIsReelOpen] = useState(false);
   const [viewMode, setViewMode] = useState<
-    'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics' | 'stripboard' | 'adr'
+    'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics' | 'stripboard' | 'adr' | 'budget'
   >('editor');
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -593,6 +595,17 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               <Mic className="w-3.5 h-3.5" />
               <span>ADR Sheet</span>
             </button>
+            <button
+              onClick={() => setViewMode('budget')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'budget'
+                  ? 'bg-emerald-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <DollarSign className="w-3.5 h-3.5" />
+              <span>Budget</span>
+            </button>
           </div>
 
           {/* Actor Sides Generator Button */}
@@ -744,6 +757,10 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           screenplayNode={node}
           nodes={nodes}
           characters={characters}
+        />
+      ) : viewMode === 'budget' ? (
+        <ProductionBudgetView
+          screenplayNode={node}
         />
       ) : (
         <div className="flex-1 flex overflow-hidden">

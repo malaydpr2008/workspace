@@ -386,3 +386,89 @@ class AudioSpottingCue(models.Model):
     def __str__(self):
         return f"[{self.cue_type}] {self.cue_name} ({self.scene_id})"
 
+
+class ProductionBudget(models.Model):
+    CURRENCY_CHOICES = [
+        ("USD", "USD ($)"),
+        ("EUR", "EUR (€)"),
+        ("GBP", "GBP (£)"),
+        ("INR", "INR (₹)"),
+        ("CAD", "CAD (C$)"),
+        ("AUD", "AUD (A$)"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="budgets")
+    screenplay = models.ForeignKey(WorkspaceNode, on_delete=models.CASCADE, related_name="budgets")
+    title = models.CharField(max_length=255, default="Production Budget - Master Draft")
+    currency = models.CharField(max_length=10, default="USD")
+    contingency_percentage = models.FloatField(default=10.0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["workspace", "screenplay"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.currency})"
+
+
+class BudgetCategory(models.Model):
+    TIER_CHOICES = [
+        ("ATL", "Above-The-Line (ATL)"),
+        ("BTL_PRODUCTION", "Below-The-Line Production (BTL)"),
+        ("BTL_POST", "Below-The-Line Post-Production (BTL)"),
+        ("OTHER", "Other / General & Administrative"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    budget = models.ForeignKey(ProductionBudget, on_delete=models.CASCADE, related_name="categories")
+    code = models.CharField(max_length=20)
+    name = models.CharField(max_length=150)
+    tier = models.CharField(max_length=50, choices=TIER_CHOICES, default="BTL_PRODUCTION")
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "code"]
+        indexes = [
+            models.Index(fields=["budget", "tier"]),
+        ]
+
+    def __str__(self):
+        return f"{self.code} - {self.name} ({self.tier})"
+
+
+class BudgetLineItem(models.Model):
+    RATE_TYPE_CHOICES = [
+        ("FLAT", "Flat Rate"),
+        ("DAILY", "Daily"),
+        ("WEEKLY", "Weekly"),
+        ("HOURLY", "Hourly"),
+        ("PER_UNIT", "Per Unit"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.ForeignKey(BudgetCategory, on_delete=models.CASCADE, related_name="line_items")
+    account_code = models.CharField(max_length=30)
+    description = models.CharField(max_length=255)
+    rate_type = models.CharField(max_length=30, choices=RATE_TYPE_CHOICES, default="DAILY")
+    quantity = models.FloatField(default=1.0)
+    rate = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    fringe_percentage = models.FloatField(default=0.0)
+    actual_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    notes = models.TextField(blank=True)
+    character = models.ForeignKey(Character, null=True, blank=True, on_delete=models.SET_NULL, related_name="budget_items")
+    breakdown_element = models.ForeignKey(BreakdownElement, null=True, blank=True, on_delete=models.SET_NULL, related_name="budget_items")
+
+    class Meta:
+        ordering = ["account_code"]
+        indexes = [
+            models.Index(fields=["category", "account_code"]),
+        ]
+
+    def __str__(self):
+        return f"{self.account_code}: {self.description}"
+

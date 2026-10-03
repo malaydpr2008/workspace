@@ -234,4 +234,63 @@ export interface AudioSpottingCue {
   created_at: string;
 }
 
+export type BudgetTier = 'ATL' | 'BTL_PRODUCTION' | 'BTL_POST' | 'OTHER';
+
+export type RateType = 'FLAT' | 'DAILY' | 'WEEKLY' | 'HOURLY' | 'PER_UNIT';
+
+export interface BudgetLineItem {
+  id: string;
+  category: string;
+  account_code: string;
+  description: string;
+  rate_type: RateType;
+  quantity: number;
+  rate: string | number;
+  fringe_percentage: number;
+  actual_cost: string | number;
+  estimated_total: number;
+  variance: number;
+  notes: string;
+  character?: string | null;
+  character_name?: string;
+  breakdown_element?: string | null;
+  breakdown_element_name?: string;
+}
+
+export interface BudgetCategory {
+  id: string;
+  budget: string;
+  code: string;
+  name: string;
+  tier: BudgetTier;
+  order: number;
+  line_items: BudgetLineItem[];
+  subtotal_estimated: number;
+  subtotal_actual: number;
+  subtotal_variance: number;
+}
+
+export interface ProductionBudget {
+  id: string;
+  workspace: string;
+  screenplay: string;
+  screenplay_title?: string;
+  title: string;
+  currency: string;
+  contingency_percentage: number;
+  categories: BudgetCategory[];
+  atl_subtotal: number;
+  btl_production_subtotal: number;
+  btl_post_subtotal: number;
+  other_subtotal: number;
+  subtotal_before_contingency: number;
+  contingency_amount: number;
+  grand_total: number;
+  actual_total: number;
+  variance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+
 

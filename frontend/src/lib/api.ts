@@ -12,6 +12,9 @@ import {
   ProductionTake,
   ADRCue,
   AudioSpottingCue,
+  ProductionBudget,
+  BudgetCategory,
+  BudgetLineItem,
 } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -646,6 +649,116 @@ export async function deleteAudioSpottingCue(cueId: string): Promise<void> {
     throw new Error(`Delete audio spotting cue failed [${res.status}]: ${errorBody}`);
   }
 }
+
+// -------------------------------------------------------------
+// Production Budget & Department Ledger API
+// -------------------------------------------------------------
+
+export async function fetchBudgets(screenplayId?: string, workspaceId?: string): Promise<ProductionBudget[]> {
+  const url = new URL(`${API_BASE_URL}/budgets/`);
+  if (screenplayId) url.searchParams.set('screenplay', screenplayId);
+  if (workspaceId) url.searchParams.set('workspace', workspaceId);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<ProductionBudget[]>(res);
+}
+
+export async function fetchBudget(budgetId: string): Promise<ProductionBudget> {
+  const res = await fetch(`${API_BASE_URL}/budgets/${budgetId}/`, { cache: 'no-store' });
+  return handleResponse<ProductionBudget>(res);
+}
+
+export async function createBudget(data: Partial<ProductionBudget>): Promise<ProductionBudget> {
+  const res = await fetch(`${API_BASE_URL}/budgets/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ProductionBudget>(res);
+}
+
+export async function updateBudget(id: string, data: Partial<ProductionBudget>): Promise<ProductionBudget> {
+  const res = await fetch(`${API_BASE_URL}/budgets/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ProductionBudget>(res);
+}
+
+export async function deleteBudget(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/budgets/${id}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete budget failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function populateBudgetFromWorkspace(budgetId: string): Promise<ProductionBudget> {
+  const res = await fetch(`${API_BASE_URL}/budgets/${budgetId}/populate_from_workspace/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return handleResponse<ProductionBudget>(res);
+}
+
+export async function createBudgetCategory(data: Partial<BudgetCategory>): Promise<BudgetCategory> {
+  const res = await fetch(`${API_BASE_URL}/budget-categories/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<BudgetCategory>(res);
+}
+
+export async function updateBudgetCategory(id: string, data: Partial<BudgetCategory>): Promise<BudgetCategory> {
+  const res = await fetch(`${API_BASE_URL}/budget-categories/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<BudgetCategory>(res);
+}
+
+export async function deleteBudgetCategory(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/budget-categories/${id}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete budget category failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function createBudgetLineItem(data: Partial<BudgetLineItem>): Promise<BudgetLineItem> {
+  const res = await fetch(`${API_BASE_URL}/budget-line-items/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<BudgetLineItem>(res);
+}
+
+export async function updateBudgetLineItem(id: string, data: Partial<BudgetLineItem>): Promise<BudgetLineItem> {
+  const res = await fetch(`${API_BASE_URL}/budget-line-items/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<BudgetLineItem>(res);
+}
+
+export async function deleteBudgetLineItem(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/budget-line-items/${id}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete budget line item failed [${res.status}]: ${errorBody}`);
+  }
+}
+
 
 
 

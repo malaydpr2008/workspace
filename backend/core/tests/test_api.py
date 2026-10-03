@@ -16,6 +16,9 @@ from core.models import (
     ProductionTake,
     ADRCue,
     AudioSpottingCue,
+    ProductionBudget,
+    BudgetCategory,
+    BudgetLineItem,
 )
 
 
@@ -652,4 +655,148 @@ class ADRCueAndAudioSpottingAPITests(APITestCase):
         self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(filter_resp.data), 1)
         self.assertEqual(filter_resp.data[0]["id"], cue_id)
+
+
+class ProductionBudgetAPITests(APITestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Cyberpunk Thriller", slug="cyberpunk-thriller")
+        self.screenplay = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            type="screenplay",
+            title="Neon Horizon",
+            rank="0|h0:",
+        )
+        self.scene = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.screenplay,
+            type="scene",
+            title="INT. RUNNER'S DEN - NIGHT",
+            rank="0|h1:",
+        )
+        self.character = Character.objects.create(
+            workspace=self.workspace,
+            name="Kaelen Cross",
+        )
+        self.dialogue = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.scene,
+            type="dialogue",
+            content="They are scanning the sector right now.",
+            properties={"character_id": str(self.character.id), "character_name": "Kaelen Cross"},
+            rank="0|h1:0|h0:",
+        )
+        self.element = BreakdownElement.objects.create(
+            workspace=self.workspace,
+            category="PROP",
+            name="Neural Deck Modulator",
+        )
+        self.adr_cue = ADRCue.objects.create(
+            workspace=self.workspace,
+            dialogue_node=self.dialogue,
+            character=self.character,
+            cue_number="KAE-001",
+            reason="NOISE",
+            priority="CRITICAL",
+            status="SCHEDULED",
+        )
+
+    def test_budget_calculations_and_variance(self):
+        budget_url = reverse("productionbudget-list")
+        create_resp = self.client.post(
+            budget_url,
+            {
+                "workspace": str(self.workspace.id),
+                "screenplay": str(self.screenplay.id),
+                "title": "Principal Photography Master Budget",
+                "currency": "USD",
+                "contingency_percentage": 10.0,
+            },
+            format="json",
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        budget_id = create_resp.data["id"]
+
+        # Create Category
+        cat_url = reverse("budgetcategory-list")
+        cat_resp = self.client.post(
+            cat_url,
+            {
+                "budget": budget_id,
+                "code": "1000",
+                "name": "STORY RIGHTS",
+                "tier": "ATL",
+                "order": 1,
+            },
+            format="json",
+        )
+        self.assertEqual(cat_resp.status_code, status.HTTP_201_CREATED)
+        category_id = cat_resp.data["id"]
+
+        # Create Line Item: 2 days @ 1,000 with 10% fringe = 2,200 estimated
+        item_url = reverse("budgetlineitem-list")
+        item_resp = self.client.post(
+            item_url,
+            {
+                "category": category_id,
+                "account_code": "1001",
+                "description": "Lead Screenwriter",
+                "rate_type": "DAILY",
+                "quantity": 2.0,
+                "rate": "1000.00",
+                "fringe_percentage": 10.0,
+                "actual_cost": "2000.00",
+            },
+            format="json",
+        )
+        self.assertEqual(item_resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(float(item_resp.data["estimated_total"]), 2200.00)
+        self.assertEqual(float(item_resp.data["variance"]), 200.00)
+
+        # Retrieve budget details with calculated totals
+        detail_url = reverse("productionbudget-detail", kwargs={"pk": budget_id})
+        detail_resp = self.client.get(detail_url)
+        self.assertEqual(detail_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(float(detail_resp.data["atl_subtotal"]), 2200.00)
+        self.assertEqual(float(detail_resp.data["subtotal_before_contingency"]), 2200.00)
+        self.assertEqual(float(detail_resp.data["contingency_amount"]), 220.00)
+        self.assertEqual(float(detail_resp.data["grand_total"]), 2420.00)
+        self.assertEqual(float(detail_resp.data["actual_total"]), 2000.00)
+        self.assertEqual(float(detail_resp.data["variance"]), 420.00)
+
+    def test_populate_budget_from_workspace(self):
+        budget = ProductionBudget.objects.create(
+            workspace=self.workspace,
+            screenplay=self.screenplay,
+            title="Auto-Populate Draft",
+            currency="USD",
+            contingency_percentage=10.0,
+        )
+        pop_url = reverse("productionbudget-populate-from-workspace", kwargs={"pk": str(budget.id)})
+        resp = self.client.post(pop_url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        # Check categories created
+        categories = resp.data["categories"]
+        self.assertGreaterEqual(len(categories), 5)
+        codes = [c["code"] for c in categories]
+        self.assertIn("1000", codes)
+        self.assertIn("2000", codes)
+        self.assertIn("3000", codes)
+        self.assertIn("4000", codes)
+        self.assertIn("5000", codes)
+        self.assertIn("6000", codes)
+
+        # Check cast line item populated for Kaelen Cross
+        cast_cat = next(c for c in categories if c["code"] == "3000")
+        cast_descriptions = [item["description"] for item in cast_cat["line_items"]]
+        self.assertTrue(any("Kaelen Cross" in d for d in cast_descriptions))
+
+        # Check breakdown element populated for Neural Deck Modulator
+        art_cat = next(c for c in categories if c["code"] == "5000")
+        art_descriptions = [item["description"] for item in art_cat["line_items"]]
+        self.assertTrue(any("Neural Deck Modulator" in d for d in art_descriptions))
+
+        # Check grand total is non-zero
+        self.assertGreater(float(resp.data["grand_total"]), 0.0)
+
 
