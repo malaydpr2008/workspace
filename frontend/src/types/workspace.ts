@@ -393,6 +393,40 @@ export interface CollaboratorPresence {
   lastSeen: number;
 }
 
+export type CoverageVerdict = 'RECOMMEND' | 'CONSIDER' | 'PASS';
+
+export interface ScriptCoverageReport {
+  id: string;
+  workspace: string;
+  workspace_name?: string;
+  screenplay: string;
+  screenplay_title?: string;
+  title: string;
+  logline: string;
+  verdict: CoverageVerdict;
+  commercial_viability: number;
+  character_score: number;
+  pacing_score: number;
+  synopsis: string;
+  strengths: string[];
+  weaknesses: string[];
+  production_notes: string;
+  created_at: string;
+}
+
+export interface DialoguePunchUpSuggestion {
+  variation: string;
+  tone: string;
+  rationale: string;
+}
+
+export interface BreakdownSuggestion {
+  name: string;
+  category: BreakdownCategory;
+  confidence: number;
+  reason: string;
+}
+
 
 
 

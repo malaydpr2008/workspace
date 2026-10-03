@@ -26,6 +26,7 @@ from core.models import (
     ProductionMilestone,
     WorkspaceMembership,
     StudioActivityLog,
+    ScriptCoverageReport,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -48,6 +49,7 @@ from core.serializers import (
     ProductionMilestoneSerializer,
     WorkspaceMembershipSerializer,
     StudioActivityLogSerializer,
+    ScriptCoverageReportSerializer,
 )
 from core.permissions import RolePermissionPolicy
 
@@ -120,6 +122,60 @@ class WorkspaceNodeViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(results, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def punch_up_dialogue(self, request, pk=None):
+        node = self.get_object()
+        tone = request.data.get("tone", "SHARPER")
+        line_text = node.content or ""
+        char_name = "CHARACTER"
+        char_meta = {}
+
+        if node.properties:
+            char_name = node.properties.get("character_name") or char_name
+            char_id = node.properties.get("character_id")
+            if char_id:
+                char_obj = Character.objects.filter(id=char_id).first()
+                if char_obj:
+                    char_name = char_obj.name
+                    char_meta = char_obj.metadata or {}
+
+        scene_title = node.parent.title if node.parent else ""
+        from core.ai_service import StudioAIEngine
+        suggestions = StudioAIEngine.punch_up_dialogue(
+            line_text=line_text,
+            character_name=char_name,
+            character_metadata=char_meta,
+            scene_context=scene_title,
+            tone=tone,
+        )
+        return Response({
+            "node_id": str(node.id),
+            "character_name": char_name,
+            "tone": tone,
+            "original_line": line_text,
+            "suggestions": suggestions,
+        })
+
+    @action(detail=True, methods=["post"])
+    def auto_detect_breakdown(self, request, pk=None):
+        node = self.get_object()
+        from core.ai_service import StudioAIEngine
+
+        if node.type == "scene":
+            action_children = WorkspaceNode.objects.filter(parent=node, type="action").order_by("rank")
+            text_parts = [node.title or ""]
+            text_parts.extend(c.content for c in action_children if c.content)
+            combined_text = "\n".join(text_parts)
+        else:
+            combined_text = f"{node.title or ''}\n{node.content or ''}"
+
+        suggestions = StudioAIEngine.extract_breakdown_suggestions(combined_text)
+        return Response({
+            "scene_id": str(node.id),
+            "suggestions": suggestions,
+        })
+
 
 
 class CharacterViewSet(viewsets.ModelViewSet):
@@ -961,6 +1017,62 @@ class StudioActivityLogViewSet(viewsets.ModelViewSet):
         if action_type:
             qs = qs.filter(action_type__iexact=action_type)
         return qs
+
+
+class ScriptCoverageReportViewSet(viewsets.ModelViewSet):
+    queryset = ScriptCoverageReport.objects.all().select_related("workspace", "screenplay")
+    serializer_class = ScriptCoverageReportSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        workspace_id = self.request.query_params.get("workspace")
+        if workspace_id:
+            qs = qs.filter(workspace_id=workspace_id)
+        screenplay_id = self.request.query_params.get("screenplay")
+        if screenplay_id:
+            qs = qs.filter(screenplay_id=screenplay_id)
+        return qs
+
+    @action(detail=False, methods=["post"])
+    def generate_coverage(self, request):
+        screenplay_id = request.data.get("screenplay")
+        if not screenplay_id:
+            return Response({"error": "Screenplay ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.shortcuts import get_object_or_404
+        screenplay = get_object_or_404(WorkspaceNode, id=screenplay_id)
+        workspace = screenplay.workspace
+
+        # Fetch scene nodes
+        scenes = WorkspaceNode.objects.filter(parent=screenplay, type="scene").order_by("rank")
+        if not scenes.exists():
+            scenes = WorkspaceNode.objects.filter(workspace=workspace, type="scene").order_by("rank")
+
+        characters = Character.objects.filter(workspace=workspace)
+
+        from core.ai_service import StudioAIEngine
+        data = StudioAIEngine.generate_script_coverage(screenplay, list(scenes), list(characters))
+
+        report = ScriptCoverageReport.objects.create(
+            workspace=workspace,
+            screenplay=screenplay,
+            **data,
+        )
+
+        # Log to StudioActivityLog
+        StudioActivityLog.objects.create(
+            workspace=workspace,
+            actor_name="AI Story Copilot",
+            actor_role="PRODUCER",
+            action_type="COVERAGE_GENERATED",
+            department="SCRIPT",
+            description=f"Generated executive coverage for '{screenplay.title}': {report.verdict} ({report.commercial_viability}% commercial score)",
+            target_node=screenplay,
+        )
+
+        serializer = self.get_serializer(report)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 
 
 

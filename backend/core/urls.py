@@ -21,6 +21,7 @@ from core.views import (
     ProductionMilestoneViewSet,
     WorkspaceMembershipViewSet,
     StudioActivityLogViewSet,
+    ScriptCoverageReportViewSet,
 )
 
 router = DefaultRouter()
@@ -48,6 +49,8 @@ router.register(r"budget-line-items", BudgetLineItemViewSet, basename="budgetlin
 router.register(r"milestones", ProductionMilestoneViewSet, basename="productionmilestone")
 router.register(r"memberships", WorkspaceMembershipViewSet, basename="workspacemembership")
 router.register(r"activity-logs", StudioActivityLogViewSet, basename="studioactivitylog")
+router.register(r"coverage-reports", ScriptCoverageReportViewSet, basename="scriptcoveragereport")
+
 
 urlpatterns = [
     path("", include(router.urls)),

@@ -7,11 +7,18 @@ import {
   Tag,
   Trash2,
   Printer,
+  Sparkles,
+  Check,
+  CheckCheck,
+  Loader2,
+  X,
+  AlertCircle,
 } from 'lucide-react';
-import { WorkspaceNode, BreakdownCategory } from '@/types/workspace';
+import { WorkspaceNode, BreakdownCategory, BreakdownSuggestion } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { CATEGORY_CONFIGS, BreakdownBadge } from './BreakdownBadge';
 import { downloadFile } from '@/lib/compiler';
+import { autoDetectSceneBreakdown } from '@/lib/api';
 
 interface BreakdownSheetViewProps {
   scene: WorkspaceNode | null;
@@ -37,14 +44,24 @@ export const BreakdownSheetView: React.FC<BreakdownSheetViewProps> = ({
   screenplayNode,
 }) => {
   const {
+    currentWorkspace,
     nodes,
     childrenMap,
     breakdownElements,
+    addBreakdownElement,
     removeBreakdownElement,
   } = useWorkspaceStore();
 
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // AI Breakdown Assistant state
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [suggestions, setSuggestions] = useState<BreakdownSuggestion[]>([]);
+  const [approvedNames, setApprovedNames] = useState<Set<string>>(new Set());
+  const [drawerCatFilter, setDrawerCatFilter] = useState<string>('ALL');
+  const [isBatchApproving, setIsBatchApproving] = useState(false);
 
   // Blocks belonging to the current scene
   const sceneBlockIds = useMemo(() => {
@@ -167,6 +184,67 @@ export const BreakdownSheetView: React.FC<BreakdownSheetViewProps> = ({
     downloadFile(text, `${safeTitle}_breakdown_sheet.txt`, 'text/plain;charset=utf-8');
   };
 
+  // Handler to run AI Auto-Detection on current scene
+  const handleAutoDetect = async () => {
+    const targetScene = scene || scenes[0];
+    if (!targetScene) return;
+
+    setIsDetecting(true);
+    try {
+      const results = await autoDetectSceneBreakdown(targetScene.id);
+      setSuggestions(results);
+      setApprovedNames(new Set());
+      setIsDrawerOpen(true);
+    } catch (err) {
+      console.error('Failed to auto-detect scene breakdown', err);
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
+  const handleApproveSuggestion = async (suggestion: BreakdownSuggestion) => {
+    if (!currentWorkspace) return;
+    const blockIds = Array.from(sceneBlockIds);
+    // Try to find the block containing the suggestion name
+    const matchingBlockId = blockIds.find((bid) =>
+      nodes[bid]?.content?.toLowerCase().includes(suggestion.name.toLowerCase())
+    );
+    const targetBlockIds = matchingBlockId
+      ? [matchingBlockId]
+      : blockIds.length > 0
+      ? [blockIds[0]]
+      : [];
+
+    await addBreakdownElement({
+      workspace: currentWorkspace.id,
+      name: suggestion.name,
+      category: suggestion.category,
+      notes: `AI Auto-Detected (${Math.round(suggestion.confidence)}% confidence): ${suggestion.reason}`,
+      block_ids: targetBlockIds,
+    });
+
+    setApprovedNames((prev) => new Set([...prev, suggestion.name]));
+  };
+
+  const handleBatchApprove = async () => {
+    setIsBatchApproving(true);
+    try {
+      const pending = suggestions.filter((s) => !approvedNames.has(s.name));
+      for (const item of pending) {
+        await handleApproveSuggestion(item);
+      }
+    } finally {
+      setIsBatchApproving(false);
+    }
+  };
+
+  const drawerFilteredSuggestions = useMemo(() => {
+    if (drawerCatFilter === 'ALL') return suggestions;
+    return suggestions.filter((s) => s.category === drawerCatFilter);
+  }, [suggestions, drawerCatFilter]);
+
+  const pendingCount = suggestions.filter((s) => !approvedNames.has(s.name)).length;
+
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
       {/* Sub-Header & Controls Bar */}
@@ -236,6 +314,21 @@ export const BreakdownSheetView: React.FC<BreakdownSheetViewProps> = ({
             placeholder="Search elements..."
             className="bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500 w-36 sm:w-48"
           />
+
+          {/* AI Auto-Detect Elements Button */}
+          <button
+            onClick={handleAutoDetect}
+            disabled={isDetecting || (!scene && scenes.length === 0)}
+            className="flex items-center space-x-1.5 px-3 py-1 bg-gradient-to-r from-purple-600/20 to-indigo-600/20 hover:from-purple-600/30 hover:to-indigo-600/30 text-purple-300 border border-purple-500/40 rounded-lg text-xs font-mono font-medium disabled:opacity-40 transition-colors shadow-sm"
+            title="Scan scene action text with AI to suggest production breakdown elements"
+          >
+            {isDetecting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            )}
+            <span>{isDetecting ? 'Scanning Scene...' : 'AI Auto-Detect'}</span>
+          </button>
 
           <button
             onClick={handleExportCSV}
@@ -394,6 +487,185 @@ export const BreakdownSheetView: React.FC<BreakdownSheetViewProps> = ({
           })
         )}
       </div>
+
+      {/* AI Breakdown Suggestions Review Drawer */}
+      {isDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-opacity no-print">
+          <div
+            className="w-full max-w-lg bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-100 font-mono flex items-center space-x-2">
+                    <span>AI Breakdown Assistant</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold">
+                      {suggestions.length} Found
+                    </span>
+                  </h2>
+                  <p className="text-[11px] text-slate-400 font-mono truncate max-w-xs">
+                    {scene ? scene.title : 'Scene Candidates'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDrawerOpen(false)}
+                className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Close Drawer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Filter & Batch Actions */}
+            <div className="p-4 border-b border-slate-800/80 bg-slate-950/40 space-y-3">
+              {/* Category Pills */}
+              <div className="flex items-center space-x-1.5 overflow-x-auto pb-1">
+                <button
+                  onClick={() => setDrawerCatFilter('ALL')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-mono transition-colors ${
+                    drawerCatFilter === 'ALL'
+                      ? 'bg-purple-600 text-white font-semibold'
+                      : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800'
+                  }`}
+                >
+                  All ({suggestions.length})
+                </button>
+                {CATEGORIES.map((cat) => {
+                  const count = suggestions.filter((s) => s.category === cat).length;
+                  if (count === 0) return null;
+                  const config = CATEGORY_CONFIGS[cat];
+                  const isSel = drawerCatFilter === cat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setDrawerCatFilter(cat)}
+                      className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono transition-colors ${
+                        isSel
+                          ? `${config.badgeClass} ring-1 ring-white/20 font-semibold`
+                          : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${config.dotColor}`} />
+                      <span>{config.label}</span>
+                      <span className="opacity-60 text-[9px]">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Batch Action Bar */}
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-slate-400">
+                  {approvedNames.size} approved • {pendingCount} pending
+                </span>
+                <button
+                  onClick={handleBatchApprove}
+                  disabled={pendingCount === 0 || isBatchApproving}
+                  className="flex items-center space-x-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+                >
+                  {isBatchApproving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCheck className="w-3.5 h-3.5" />
+                  )}
+                  <span>Batch Approve All ({pendingCount})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Candidate List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {drawerFilteredSuggestions.length === 0 ? (
+                <div className="py-16 text-center text-slate-500">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-xs font-mono">
+                    {suggestions.length === 0
+                      ? 'No candidate elements detected in this scene text.'
+                      : 'No suggestions match this department filter.'}
+                  </p>
+                </div>
+              ) : (
+                drawerFilteredSuggestions.map((item, idx) => {
+                  const isApproved = approvedNames.has(item.name);
+                  const config = CATEGORY_CONFIGS[item.category] || CATEGORY_CONFIGS.PROP;
+                  const IconComp = config.icon;
+                  const confPct = Math.round(item.confidence);
+                  const confColor =
+                    confPct >= 85
+                      ? 'text-emerald-400 bg-emerald-950/60 border-emerald-500/40'
+                      : confPct >= 70
+                      ? 'text-amber-400 bg-amber-950/60 border-amber-500/40'
+                      : 'text-indigo-400 bg-indigo-950/60 border-indigo-500/40';
+
+                  return (
+                    <div
+                      key={`${item.category}-${item.name}-${idx}`}
+                      className={`p-3.5 rounded-xl border transition-all ${
+                        isApproved
+                          ? 'bg-slate-950/40 border-emerald-900/40 opacity-75'
+                          : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          {/* Badges */}
+                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                            <span
+                              className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${config.badgeClass}`}
+                            >
+                              <IconComp className="w-3 h-3" />
+                              <span>{config.label}</span>
+                            </span>
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono border font-semibold ${confColor}`}
+                            >
+                              {confPct}% Confidence
+                            </span>
+                          </div>
+
+                          {/* Name */}
+                          <h4 className="text-sm font-semibold text-slate-100 font-mono truncate">
+                            {item.name}
+                          </h4>
+
+                          {/* Rationale */}
+                          <p className="text-xs text-slate-400 font-sans leading-relaxed">
+                            {item.reason}
+                          </p>
+                        </div>
+
+                        {/* Approve Button */}
+                        <div className="shrink-0 pt-0.5">
+                          {isApproved ? (
+                            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 text-xs font-mono font-medium">
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Approved</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleApproveSuggestion(item)}
+                              className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-mono font-medium transition-colors shadow-sm"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Approve</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

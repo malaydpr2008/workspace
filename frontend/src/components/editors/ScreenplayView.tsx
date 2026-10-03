@@ -28,6 +28,7 @@ import {
   Lock,
   Users,
   Activity,
+  Sparkles,
 } from 'lucide-react';
 import { WorkspaceNode, Shot, RevisionColor } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -60,6 +61,7 @@ import { ProductionBudgetView } from '@/components/budget/ProductionBudgetView';
 import { StudioCommandCenterView } from '@/components/dashboard/StudioCommandCenterView';
 import { TeamManagementModal } from '@/components/team/TeamManagementModal';
 import { StudioActivityDrawer } from '@/components/activity/StudioActivityDrawer';
+import { ScriptCoverageModal } from '@/components/ai/ScriptCoverageModal';
 import { exportProductionBibleZip } from '@/lib/productionBible';
 import {
   getRevisionConfig,
@@ -119,6 +121,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
+  const [isCoverageModalOpen, setIsCoverageModalOpen] = useState(false);
 
   // Script Marginalia / Review Notes Drawer & Take Logger State
   const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState(false);
@@ -669,6 +672,16 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           >
             <Users className="w-3.5 h-3.5" />
             <span>Team</span>
+          </button>
+
+          {/* Executive Studio Script Coverage Button */}
+          <button
+            onClick={() => setIsCoverageModalOpen(true)}
+            className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-medium transition-all"
+            title="Generate and view Executive Studio Script Coverage Report"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Script Coverage</span>
           </button>
 
           {/* Actor Sides Generator Button */}
@@ -1976,6 +1989,15 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           setViewMode('editor');
         }}
       />
+
+      {/* Executive Script Coverage Modal */}
+      {isCoverageModalOpen && (
+        <ScriptCoverageModal
+          screenplayNode={isScene ? nodes[node.parent || ''] || node : node}
+          isOpen={isCoverageModalOpen}
+          onClose={() => setIsCoverageModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

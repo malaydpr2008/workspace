@@ -311,6 +311,22 @@ body {
     padding-bottom: 8pt !important;
     margin-bottom: 12pt !important;
   }
+
+  /* Executive Script Coverage Print Styles */
+  .coverage-verdict-recommend {
+    color: #047857 !important;
+    border-color: #047857 !important;
+  }
+
+  .coverage-verdict-consider {
+    color: #b45309 !important;
+    border-color: #b45309 !important;
+  }
+
+  .coverage-verdict-pass {
+    color: #b91c1c !important;
+    border-color: #b91c1c !important;
+  }
 }
 
 

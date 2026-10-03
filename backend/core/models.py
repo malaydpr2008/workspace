@@ -575,3 +575,38 @@ class StudioActivityLog(models.Model):
         return f"[{self.department}] {self.actor_name} ({self.actor_role}): {self.action_type} - {self.description[:40]}"
 
 
+class ScriptCoverageReport(models.Model):
+    VERDICT_CHOICES = [
+        ("RECOMMEND", "Recommend"),
+        ("CONSIDER", "Consider"),
+        ("PASS", "Pass"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="coverage_reports")
+    screenplay = models.ForeignKey(WorkspaceNode, on_delete=models.CASCADE, related_name="coverage_reports")
+    title = models.CharField(max_length=255)
+    logline = models.TextField()
+    verdict = models.CharField(max_length=30, choices=VERDICT_CHOICES, default="CONSIDER")
+    commercial_viability = models.PositiveIntegerField(default=75)
+    character_score = models.PositiveIntegerField(default=80)
+    pacing_score = models.PositiveIntegerField(default=70)
+    synopsis = models.TextField()
+    strengths = models.JSONField(default=list)
+    weaknesses = models.JSONField(default=list)
+    production_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["workspace", "-created_at"]),
+            models.Index(fields=["screenplay", "-created_at"]),
+            models.Index(fields=["verdict"]),
+        ]
+
+    def __str__(self):
+        return f"Coverage: {self.title} [{self.verdict}]"
+
+
+

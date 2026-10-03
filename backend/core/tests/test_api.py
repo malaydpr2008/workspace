@@ -22,6 +22,7 @@ from core.models import (
     ProductionMilestone,
     WorkspaceMembership,
     StudioActivityLog,
+    ScriptCoverageReport,
 )
 from core.permissions import RolePermissionPolicy
 
@@ -1110,6 +1111,109 @@ class StudioActivityLogAndWebSocketAPITests(APITestCase):
             await communicator.disconnect()
 
         async_to_sync(_test)()
+
+
+class StudioAIEngineAndCoverageAPITests(APITestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="AI Studio", slug="ai-studio")
+        self.screenplay = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            type="screenplay",
+            title="Inception Horizon",
+            rank="0|h0:",
+        )
+        self.scene = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.screenplay,
+            type="scene",
+            title="EXT. ROOFTOP - DUSK",
+            rank="0|h1:",
+        )
+        self.action = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.scene,
+            type="action",
+            content="Cobb checks his vintage brass lighter and draws a concealed firearm as sirens echo in the neon rain.",
+            rank="0|h2:",
+        )
+        self.character = Character.objects.create(
+            workspace=self.workspace,
+            name="COBB",
+            avatar="",
+            metadata={"description": "Weary extractor, calm under lethal pressure."},
+        )
+        self.dialogue_block = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            parent=self.scene,
+            type="dialogue",
+            content="We have to get out of here before the extraction team finds us.",
+            properties={"character_name": "COBB", "character_id": str(self.character.id)},
+            rank="0|h3:",
+        )
+
+    def test_generate_coverage_report(self):
+        url = reverse("scriptcoveragereport-generate-coverage")
+        payload = {"screenplay": str(self.screenplay.id)}
+        resp = self.client.post(url, payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertIn("Inception Horizon", resp.data["title"])
+        self.assertIn(resp.data["verdict"], ["RECOMMEND", "CONSIDER", "PASS"])
+        self.assertGreaterEqual(resp.data["commercial_viability"], 50)
+        self.assertGreaterEqual(resp.data["character_score"], 50)
+        self.assertGreaterEqual(resp.data["pacing_score"], 50)
+        self.assertTrue(len(resp.data["synopsis"]) > 0)
+        self.assertTrue(len(resp.data["strengths"]) > 0)
+        self.assertTrue(len(resp.data["weaknesses"]) > 0)
+
+        # Verify activity log was recorded
+        log = self.workspace.activity_logs.filter(action_type="COVERAGE_GENERATED").first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.actor_name, "AI Story Copilot")
+
+    def test_coverage_reports_query_filtering(self):
+        # Create a report directly
+        ScriptCoverageReport.objects.create(
+            workspace=self.workspace,
+            screenplay=self.screenplay,
+            title="Draft Coverage",
+            logline="A master thief attempts dream espionage.",
+            verdict="RECOMMEND",
+            synopsis="Three acts of inception.",
+        )
+        url = reverse("scriptcoveragereport-list")
+        resp = self.client.get(f"{url}?workspace={self.workspace.id}&screenplay={self.screenplay.id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]["verdict"], "RECOMMEND")
+
+    def test_punch_up_dialogue_action(self):
+        url = reverse("workspacenode-punch-up-dialogue", kwargs={"pk": str(self.dialogue_block.id)})
+        # Test SHARPER tone
+        resp = self.client.post(url, {"tone": "SHARPER"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["tone"], "SHARPER")
+        self.assertEqual(resp.data["character_name"], "COBB")
+        self.assertGreaterEqual(len(resp.data["suggestions"]), 3)
+        self.assertTrue(any("variation" in s for s in resp.data["suggestions"]))
+
+        # Test SUBTEXT tone
+        resp_sub = self.client.post(url, {"tone": "SUBTEXT"}, format="json")
+        self.assertEqual(resp_sub.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp_sub.data["tone"], "SUBTEXT")
+        self.assertGreaterEqual(len(resp_sub.data["suggestions"]), 3)
+
+    def test_auto_detect_breakdown_action(self):
+        url = reverse("workspacenode-auto-detect-breakdown", kwargs={"pk": str(self.scene.id)})
+        resp = self.client.post(url, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(resp.data["suggestions"]), 1)
+        names = [s["name"] for s in resp.data["suggestions"]]
+        # In action text: "lighter", "firearm", "sirens", "neon rain"
+        # Should detect Lighter or Firearm
+        self.assertTrue(
+            any("Lighter" in n or "Firearm" in n or "Pistol" in n or "Prop" in n for n in names)
+        )
+
 
 
 

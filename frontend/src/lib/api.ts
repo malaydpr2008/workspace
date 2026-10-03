@@ -20,6 +20,9 @@ import {
   WorkspaceRole,
   RoleCapabilities,
   StudioActivityLog,
+  ScriptCoverageReport,
+  DialoguePunchUpSuggestion,
+  BreakdownSuggestion,
 } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -932,6 +935,58 @@ export async function createActivityLog(
   });
   return handleResponse<StudioActivityLog>(res);
 }
+
+// -------------------------------------------------------------
+// AI Story Copilot & Script Coverage API
+// -------------------------------------------------------------
+
+export async function fetchCoverageReports(
+  screenplayId: string,
+  workspaceId?: string
+): Promise<ScriptCoverageReport[]> {
+  const url = new URL(`${API_BASE_URL}/coverage-reports/`);
+  url.searchParams.set('screenplay', screenplayId);
+  if (workspaceId) url.searchParams.set('workspace', workspaceId);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<ScriptCoverageReport[]>(res);
+}
+
+export async function generateCoverageReport(
+  screenplayId: string,
+  workspaceId?: string
+): Promise<ScriptCoverageReport> {
+  const res = await fetch(`${API_BASE_URL}/coverage-reports/generate_coverage/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ screenplay: screenplayId, workspace: workspaceId }),
+  });
+  return handleResponse<ScriptCoverageReport>(res);
+}
+
+export async function requestDialoguePunchUp(
+  nodeId: string,
+  tone: string = 'SHARPER'
+): Promise<DialoguePunchUpSuggestion[]> {
+  const res = await fetch(`${API_BASE_URL}/nodes/${nodeId}/punch_up_dialogue/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tone }),
+  });
+  const data = await handleResponse<{ suggestions: DialoguePunchUpSuggestion[] }>(res);
+  return data.suggestions || [];
+}
+
+export async function autoDetectSceneBreakdown(
+  sceneId: string
+): Promise<BreakdownSuggestion[]> {
+  const res = await fetch(`${API_BASE_URL}/nodes/${sceneId}/auto_detect_breakdown/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const data = await handleResponse<{ suggestions: BreakdownSuggestion[] }>(res);
+  return data.suggestions || [];
+}
+
 
 
 

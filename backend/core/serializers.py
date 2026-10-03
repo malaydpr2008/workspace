@@ -20,6 +20,7 @@ from core.models import (
     ProductionMilestone,
     WorkspaceMembership,
     StudioActivityLog,
+    ScriptCoverageReport,
 )
 
 
@@ -576,6 +577,33 @@ class StudioActivityLogSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "workspace_name", "target_node_title", "created_at"]
+
+
+class ScriptCoverageReportSerializer(serializers.ModelSerializer):
+    workspace_name = serializers.CharField(source="workspace.name", read_only=True)
+    screenplay_title = serializers.CharField(source="screenplay.title", read_only=True)
+
+    class Meta:
+        model = ScriptCoverageReport
+        fields = [
+            "id",
+            "workspace",
+            "workspace_name",
+            "screenplay",
+            "screenplay_title",
+            "title",
+            "logline",
+            "verdict",
+            "commercial_viability",
+            "character_score",
+            "pacing_score",
+            "synopsis",
+            "strengths",
+            "weaknesses",
+            "production_notes",
+            "created_at",
+        ]
+        read_only_fields = ["id", "workspace_name", "screenplay_title", "created_at"]
 
 
 

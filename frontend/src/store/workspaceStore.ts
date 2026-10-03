@@ -23,6 +23,7 @@ import {
   RoleCapabilities,
   StudioActivityLog,
   CollaboratorPresence,
+  ScriptCoverageReport,
 } from '@/types/workspace';
 import {
   fetchWorkspaces,
@@ -97,6 +98,8 @@ import {
   fetchCurrentUserRole,
   fetchActivityLogs,
   createActivityLog,
+  fetchCoverageReports,
+  generateCoverageReport,
 } from '@/lib/api';
 
 export function getRoleCapabilities(role: WorkspaceRole): RoleCapabilities {
@@ -351,6 +354,15 @@ interface WorkspaceState {
   ) => Promise<StudioActivityLog | null>;
   updateCollaboratorPresence: (collaborator: CollaboratorPresence) => void;
   removeCollaborator: (userId: string) => void;
+  coverageReports: ScriptCoverageReport[];
+  loadCoverageReports: (
+    screenplayId: string,
+    workspaceId?: string
+  ) => Promise<ScriptCoverageReport[]>;
+  generateCoverageReportItem: (
+    screenplayId: string,
+    workspaceId?: string
+  ) => Promise<ScriptCoverageReport | null>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -378,6 +390,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   memberships: [],
   collaborators: [],
   activityLogs: [],
+  coverageReports: [],
   currentUserRole: 'OWNER',
   currentCapabilities: {
     canEditScript: true,
@@ -2021,6 +2034,31 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       collaborators: state.collaborators.filter((c) => c.userId !== userId),
     }));
   },
+
+  loadCoverageReports: async (screenplayId, workspaceId) => {
+    try {
+      const reports = await fetchCoverageReports(screenplayId, workspaceId);
+      set({ coverageReports: reports });
+      return reports;
+    } catch (err) {
+      console.error('Failed to load coverage reports', err);
+      return [];
+    }
+  },
+
+  generateCoverageReportItem: async (screenplayId, workspaceId) => {
+    try {
+      const report = await generateCoverageReport(screenplayId, workspaceId);
+      set((state) => ({
+        coverageReports: [report, ...state.coverageReports],
+      }));
+      return report;
+    } catch (err) {
+      console.error('Failed to generate coverage report', err);
+      return null;
+    }
+  },
 }));
+
 
 
