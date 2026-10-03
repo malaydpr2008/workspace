@@ -17,6 +17,7 @@ from core.models import (
     ProductionBudget,
     BudgetCategory,
     BudgetLineItem,
+    ProductionMilestone,
 )
 
 
@@ -495,5 +496,34 @@ class ProductionBudgetSerializer(serializers.ModelSerializer):
 
     def get_variance(self, obj):
         return round(self.get_grand_total(obj) - self.get_actual_total(obj), 2)
+
+
+class ProductionMilestoneSerializer(serializers.ModelSerializer):
+    screenplay_title = serializers.CharField(source="screenplay.title", read_only=True)
+
+    class Meta:
+        model = ProductionMilestone
+        fields = [
+            "id",
+            "workspace",
+            "screenplay",
+            "screenplay_title",
+            "phase",
+            "title",
+            "start_date",
+            "end_date",
+            "status",
+            "progress_percentage",
+            "department",
+            "order",
+            "created_at",
+        ]
+        read_only_fields = ["id", "screenplay_title", "created_at"]
+
+    def validate(self, attrs):
+        if "workspace" not in attrs and "screenplay" in attrs:
+            attrs["workspace"] = attrs["screenplay"].workspace
+        return attrs
+
 
 

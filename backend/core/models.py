@@ -472,3 +472,44 @@ class BudgetLineItem(models.Model):
     def __str__(self):
         return f"{self.account_code}: {self.description}"
 
+
+class ProductionMilestone(models.Model):
+    PHASE_CHOICES = [
+        ("DEVELOPMENT", "Development"),
+        ("PRE_PRODUCTION", "Pre-Production"),
+        ("PRODUCTION", "Production"),
+        ("POST_PRODUCTION", "Post-Production"),
+        ("DELIVERY", "Delivery & Distribution"),
+    ]
+
+    STATUS_CHOICES = [
+        ("PLANNED", "Planned"),
+        ("IN_PROGRESS", "In Progress"),
+        ("COMPLETED", "Completed"),
+        ("DELAYED", "Delayed"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="milestones")
+    screenplay = models.ForeignKey(WorkspaceNode, on_delete=models.CASCADE, related_name="milestones")
+    phase = models.CharField(max_length=60, choices=PHASE_CHOICES, default="PRODUCTION")
+    title = models.CharField(max_length=150)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="IN_PROGRESS")
+    progress_percentage = models.PositiveIntegerField(default=0)
+    department = models.CharField(max_length=60, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "start_date", "created_at"]
+        indexes = [
+            models.Index(fields=["workspace", "screenplay"]),
+            models.Index(fields=["phase"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.phase}] {self.title} ({self.progress_percentage}%)"
+
+

@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q
 from django.db import transaction
+from datetime import date, timedelta
 from core.models import (
     Workspace,
     WorkspaceNode,
@@ -22,6 +23,7 @@ from core.models import (
     ProductionBudget,
     BudgetCategory,
     BudgetLineItem,
+    ProductionMilestone,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -41,6 +43,7 @@ from core.serializers import (
     ProductionBudgetSerializer,
     BudgetCategorySerializer,
     BudgetLineItemSerializer,
+    ProductionMilestoneSerializer,
 )
 
 
@@ -750,6 +753,144 @@ class BudgetLineItemViewSet(viewsets.ModelViewSet):
         if budget_id:
             queryset = queryset.filter(category__budget_id=budget_id)
         return queryset
+
+
+class ProductionMilestoneViewSet(viewsets.ModelViewSet):
+    queryset = ProductionMilestone.objects.all()
+    serializer_class = ProductionMilestoneSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        workspace_id = self.request.query_params.get("workspace")
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+        screenplay_id = self.request.query_params.get("screenplay")
+        if screenplay_id:
+            queryset = queryset.filter(screenplay_id=screenplay_id)
+        phase = self.request.query_params.get("phase")
+        if phase:
+            queryset = queryset.filter(phase=phase)
+        return queryset
+
+    @action(detail=False, methods=["post"])
+    def initialize_default_timeline(self, request):
+        screenplay_id = request.data.get("screenplay")
+        if not screenplay_id:
+            return Response({"error": "screenplay is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            screenplay = WorkspaceNode.objects.get(id=screenplay_id)
+        except WorkspaceNode.DoesNotExist:
+            return Response({"error": "Screenplay node not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        workspace = screenplay.workspace
+        today = date.today()
+
+        standard_milestones = [
+            {
+                "phase": "DEVELOPMENT",
+                "title": "Screenplay Draft Lock & Legal Clearance",
+                "start_date": today - timedelta(days=21),
+                "end_date": today - timedelta(days=2),
+                "status": "COMPLETED",
+                "progress_percentage": 100,
+                "department": "EXECUTIVE",
+                "order": 1,
+            },
+            {
+                "phase": "PRE_PRODUCTION",
+                "title": "Location Scouting & Art Department Build",
+                "start_date": today - timedelta(days=5),
+                "end_date": today + timedelta(days=15),
+                "status": "IN_PROGRESS",
+                "progress_percentage": 75,
+                "department": "ART",
+                "order": 2,
+            },
+            {
+                "phase": "PRE_PRODUCTION",
+                "title": "Cast Table Read & Department Walkthrough",
+                "start_date": today + timedelta(days=10),
+                "end_date": today + timedelta(days=18),
+                "status": "IN_PROGRESS",
+                "progress_percentage": 50,
+                "department": "TALENT",
+                "order": 3,
+            },
+            {
+                "phase": "PRODUCTION",
+                "title": "Principal Photography (Shooting Schedule)",
+                "start_date": today + timedelta(days=20),
+                "end_date": today + timedelta(days=50),
+                "status": "IN_PROGRESS",
+                "progress_percentage": 25,
+                "department": "CAMERA",
+                "order": 4,
+            },
+            {
+                "phase": "POST_PRODUCTION",
+                "title": "Picture Editorial Assembly & Director's Cut",
+                "start_date": today + timedelta(days=40),
+                "end_date": today + timedelta(days=75),
+                "status": "PLANNED",
+                "progress_percentage": 0,
+                "department": "EDITORIAL",
+                "order": 5,
+            },
+            {
+                "phase": "POST_PRODUCTION",
+                "title": "ADR Loop Recording & Foley Sound Design",
+                "start_date": today + timedelta(days=70),
+                "end_date": today + timedelta(days=95),
+                "status": "PLANNED",
+                "progress_percentage": 0,
+                "department": "SOUND",
+                "order": 6,
+            },
+            {
+                "phase": "POST_PRODUCTION",
+                "title": "Original Dramatic Score Recording & Mix",
+                "start_date": today + timedelta(days=80),
+                "end_date": today + timedelta(days=100),
+                "status": "PLANNED",
+                "progress_percentage": 0,
+                "department": "SOUND",
+                "order": 7,
+            },
+            {
+                "phase": "DELIVERY",
+                "title": "Dolby Vision Color Grade & Master DCP Delivery",
+                "start_date": today + timedelta(days=100),
+                "end_date": today + timedelta(days=120),
+                "status": "PLANNED",
+                "progress_percentage": 0,
+                "department": "EXECUTIVE",
+                "order": 8,
+            },
+        ]
+
+        with transaction.atomic():
+            ProductionMilestone.objects.filter(screenplay=screenplay).delete()
+
+            created_milestones = []
+            for item in standard_milestones:
+                m = ProductionMilestone.objects.create(
+                    workspace=workspace,
+                    screenplay=screenplay,
+                    phase=item["phase"],
+                    title=item["title"],
+                    start_date=item["start_date"],
+                    end_date=item["end_date"],
+                    status=item["status"],
+                    progress_percentage=item["progress_percentage"],
+                    department=item["department"],
+                    order=item["order"],
+                )
+                created_milestones.append(m)
+
+        serializer = self.get_serializer(created_milestones, many=True)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 
 
 

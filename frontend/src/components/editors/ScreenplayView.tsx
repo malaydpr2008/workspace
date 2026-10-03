@@ -24,6 +24,7 @@ import {
   Mic,
   Music,
   DollarSign,
+  LayoutDashboard,
 } from 'lucide-react';
 import { WorkspaceNode, Shot, RevisionColor } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -53,6 +54,7 @@ import { ADRCueModal } from '@/components/audio/ADRCueModal';
 import { ADRRecordingSheetView } from '@/components/audio/ADRRecordingSheetView';
 import { AudioSpottingDrawer } from '@/components/audio/AudioSpottingDrawer';
 import { ProductionBudgetView } from '@/components/budget/ProductionBudgetView';
+import { StudioCommandCenterView } from '@/components/dashboard/StudioCommandCenterView';
 import { exportProductionBibleZip } from '@/lib/productionBible';
 import {
   getRevisionConfig,
@@ -81,6 +83,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     loadNodeChildren,
     loadADRCues,
     loadAudioCuesForScene,
+    loadMilestones,
     updateNodeContent,
     updateNodeTitle,
     updateNodeProperties,
@@ -100,7 +103,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [userSelectedSceneId, setUserSelectedSceneId] = useState<string | null>(null);
   const [isReelOpen, setIsReelOpen] = useState(false);
   const [viewMode, setViewMode] = useState<
-    'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics' | 'stripboard' | 'adr' | 'budget'
+    'editor' | 'board' | 'shotlist' | 'breakdown' | 'analytics' | 'stripboard' | 'adr' | 'budget' | 'overview'
   >('editor');
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -160,8 +163,9 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     if (currentWorkspace?.id) {
       loadNotesForWorkspace(currentWorkspace.id);
       loadADRCues(currentWorkspace.id);
+      loadMilestones(node.id, currentWorkspace.id);
     }
-  }, [currentWorkspace?.id, loadNotesForWorkspace, loadADRCues]);
+  }, [currentWorkspace?.id, node.id, loadNotesForWorkspace, loadADRCues, loadMilestones]);
 
   useEffect(() => {
     if (activeSceneId) {
@@ -519,6 +523,17 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
           {/* Segmented View Mode Toggle */}
           <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
             <button
+              onClick={() => setViewMode('overview')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                viewMode === 'overview'
+                  ? 'bg-emerald-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>Overview</span>
+            </button>
+            <button
               onClick={() => setViewMode('editor')}
               className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
                 viewMode === 'editor'
@@ -706,8 +721,17 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         </div>
       </div>
 
-      {/* Main Content: Beat Board View OR Shot List OR Breakdown OR Analytics OR Script Editor */}
-      {viewMode === 'board' ? (
+      {/* Main Content: Overview Dashboard OR Beat Board View OR Shot List OR Breakdown OR Analytics OR Script Editor */}
+      {viewMode === 'overview' ? (
+        <StudioCommandCenterView
+          screenplayNode={node}
+          onJumpToTab={(tab) => setViewMode(tab)}
+          onSelectScene={(sceneId) => {
+            setUserSelectedSceneId(sceneId);
+            setViewMode('editor');
+          }}
+        />
+      ) : viewMode === 'board' ? (
         <BeatBoardView
           parentNode={node}
           beats={scenes}

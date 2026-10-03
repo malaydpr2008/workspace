@@ -292,5 +292,31 @@ export interface ProductionBudget {
   updated_at: string;
 }
 
+export type ProductionPhase =
+  | 'DEVELOPMENT'
+  | 'PRE_PRODUCTION'
+  | 'PRODUCTION'
+  | 'POST_PRODUCTION'
+  | 'DELIVERY';
+
+export type MilestoneStatus = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED';
+
+export interface ProductionMilestone {
+  id: string;
+  workspace: string;
+  screenplay: string;
+  screenplay_title?: string;
+  phase: ProductionPhase;
+  title: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  status: MilestoneStatus;
+  progress_percentage: number;
+  department: string;
+  order: number;
+  created_at: string;
+}
+
+
 
 

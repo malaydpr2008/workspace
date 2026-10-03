@@ -17,6 +17,7 @@ import {
   ProductionBudget,
   BudgetCategory,
   BudgetLineItem,
+  ProductionMilestone,
 } from '@/types/workspace';
 import {
   fetchWorkspaces,
@@ -79,6 +80,11 @@ import {
   createBudgetLineItem,
   updateBudgetLineItem,
   deleteBudgetLineItem,
+  fetchMilestones,
+  createMilestone,
+  updateMilestone,
+  deleteMilestone,
+  initializeDefaultTimeline,
 } from '@/lib/api';
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -252,6 +258,12 @@ interface WorkspaceState {
   createBudgetLineItemItem: (data: Partial<BudgetLineItem>, budgetId: string) => Promise<BudgetLineItem | null>;
   updateBudgetLineItemItem: (id: string, data: Partial<BudgetLineItem>, budgetId: string) => Promise<BudgetLineItem | null>;
   deleteBudgetLineItemItem: (id: string, budgetId: string) => Promise<void>;
+  milestones: ProductionMilestone[];
+  loadMilestones: (screenplayId: string, workspaceId?: string) => Promise<ProductionMilestone[]>;
+  createMilestoneItem: (data: Partial<ProductionMilestone>) => Promise<ProductionMilestone | null>;
+  updateMilestoneItem: (id: string, data: Partial<ProductionMilestone>) => Promise<ProductionMilestone | null>;
+  deleteMilestoneItem: (id: string) => Promise<void>;
+  initDefaultTimeline: (screenplayId: string, workspaceId?: string) => Promise<ProductionMilestone[]>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -275,6 +287,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   audioCuesByScene: {},
   budgets: [],
   activeBudgetId: null,
+  milestones: [],
   isLoading: false,
   saveStatus: 'idle',
   error: null,
@@ -1738,6 +1751,65 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }));
     } catch (err) {
       console.error('Failed to delete budget line item', err);
+    }
+  },
+
+  loadMilestones: async (screenplayId: string, workspaceId?: string) => {
+    try {
+      const milestones = await fetchMilestones({ screenplay: screenplayId, workspace: workspaceId });
+      set({ milestones });
+      return milestones;
+    } catch (err) {
+      console.error('Failed to load milestones', err);
+      return [];
+    }
+  },
+
+  createMilestoneItem: async (data: Partial<ProductionMilestone>) => {
+    try {
+      const created = await createMilestone(data);
+      set((state) => ({
+        milestones: [...state.milestones, created],
+      }));
+      return created;
+    } catch (err) {
+      console.error('Failed to create milestone', err);
+      return null;
+    }
+  },
+
+  updateMilestoneItem: async (id: string, data: Partial<ProductionMilestone>) => {
+    try {
+      const updated = await updateMilestone(id, data);
+      set((state) => ({
+        milestones: state.milestones.map((m) => (m.id === id ? updated : m)),
+      }));
+      return updated;
+    } catch (err) {
+      console.error('Failed to update milestone', err);
+      return null;
+    }
+  },
+
+  deleteMilestoneItem: async (id: string) => {
+    try {
+      await deleteMilestone(id);
+      set((state) => ({
+        milestones: state.milestones.filter((m) => m.id !== id),
+      }));
+    } catch (err) {
+      console.error('Failed to delete milestone', err);
+    }
+  },
+
+  initDefaultTimeline: async (screenplayId: string, workspaceId?: string) => {
+    try {
+      const milestones = await initializeDefaultTimeline({ screenplay: screenplayId, workspace: workspaceId });
+      set({ milestones });
+      return milestones;
+    } catch (err) {
+      console.error('Failed to initialize default timeline', err);
+      return [];
     }
   },
 }));

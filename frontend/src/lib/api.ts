@@ -15,6 +15,7 @@ import {
   ProductionBudget,
   BudgetCategory,
   BudgetLineItem,
+  ProductionMilestone,
 } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -758,6 +759,69 @@ export async function deleteBudgetLineItem(id: string): Promise<void> {
     throw new Error(`Delete budget line item failed [${res.status}]: ${errorBody}`);
   }
 }
+
+// -------------------------------------------------------------
+// Production Milestones & Timeline API
+// -------------------------------------------------------------
+
+export async function fetchMilestones(params?: {
+  screenplay?: string;
+  workspace?: string;
+  phase?: string;
+}): Promise<ProductionMilestone[]> {
+  const url = new URL(`${API_BASE_URL}/milestones/`);
+  if (params?.screenplay) url.searchParams.set('screenplay', params.screenplay);
+  if (params?.workspace) url.searchParams.set('workspace', params.workspace);
+  if (params?.phase) url.searchParams.set('phase', params.phase);
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<ProductionMilestone[]>(res);
+}
+
+export async function createMilestone(
+  data: Partial<ProductionMilestone>
+): Promise<ProductionMilestone> {
+  const res = await fetch(`${API_BASE_URL}/milestones/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ProductionMilestone>(res);
+}
+
+export async function updateMilestone(
+  id: string,
+  data: Partial<ProductionMilestone>
+): Promise<ProductionMilestone> {
+  const res = await fetch(`${API_BASE_URL}/milestones/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ProductionMilestone>(res);
+}
+
+export async function deleteMilestone(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/milestones/${id}/`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Delete milestone failed [${res.status}]: ${errorBody}`);
+  }
+}
+
+export async function initializeDefaultTimeline(data: {
+  screenplay: string;
+  workspace?: string;
+}): Promise<ProductionMilestone[]> {
+  const res = await fetch(`${API_BASE_URL}/milestones/initialize_default_timeline/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ProductionMilestone[]>(res);
+}
+
 
 
 

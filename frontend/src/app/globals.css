@@ -279,6 +279,38 @@ body {
     color: #000000 !important;
     display: block !important;
   }
+
+  /* Executive Studio Briefing Print Styles */
+  .print-executive-briefing {
+    display: block !important;
+    width: 100% !important;
+    color: #000000 !important;
+  }
+
+  .print-page-1,
+  .print-page-2 {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    min-height: 9in !important;
+    padding-bottom: 24pt !important;
+  }
+
+  .print-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  .briefing-box {
+    border: 1pt solid #333333 !important;
+    padding: 8pt !important;
+    margin-bottom: 12pt !important;
+  }
+
+  .briefing-header {
+    border-bottom: 2pt solid #000000 !important;
+    padding-bottom: 8pt !important;
+    margin-bottom: 12pt !important;
+  }
 }
 
 

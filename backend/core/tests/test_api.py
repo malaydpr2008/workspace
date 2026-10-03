@@ -19,6 +19,7 @@ from core.models import (
     ProductionBudget,
     BudgetCategory,
     BudgetLineItem,
+    ProductionMilestone,
 )
 
 
@@ -798,5 +799,75 @@ class ProductionBudgetAPITests(APITestCase):
 
         # Check grand total is non-zero
         self.assertGreater(float(resp.data["grand_total"]), 0.0)
+
+
+class ProductionMilestoneAPITests(APITestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Timeline Studio", slug="timeline-studio")
+        self.screenplay = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            type="screenplay",
+            title="Solaris Drift",
+            rank="0|h0:",
+        )
+
+    def test_milestone_crud_and_phase_filtering(self):
+        url = reverse("productionmilestone-list")
+        create_resp = self.client.post(
+            url,
+            {
+                "workspace": str(self.workspace.id),
+                "screenplay": str(self.screenplay.id),
+                "phase": "PRODUCTION",
+                "title": "Principal Photography",
+                "start_date": "2026-11-01",
+                "end_date": "2026-12-05",
+                "status": "PLANNED",
+                "progress_percentage": 0,
+                "department": "CAMERA",
+                "order": 1,
+            },
+            format="json",
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        m_id = create_resp.data["id"]
+        self.assertEqual(create_resp.data["screenplay_title"], "Solaris Drift")
+
+        # Filter by phase
+        filter_resp = self.client.get(f"{url}?screenplay={self.screenplay.id}&phase=PRODUCTION")
+        self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(filter_resp.data), 1)
+
+        # Update status and progress
+        detail_url = reverse("productionmilestone-detail", kwargs={"pk": m_id})
+        patch_resp = self.client.patch(
+            detail_url,
+            {"status": "IN_PROGRESS", "progress_percentage": 45},
+            format="json",
+        )
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_resp.data["status"], "IN_PROGRESS")
+        self.assertEqual(patch_resp.data["progress_percentage"], 45)
+
+    def test_initialize_default_timeline(self):
+        init_url = reverse("productionmilestone-initialize-default-timeline")
+        resp = self.client.post(
+            init_url,
+            {"screenplay": str(self.screenplay.id)},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(resp.data), 8)
+
+        phases = [item["phase"] for item in resp.data]
+        self.assertIn("DEVELOPMENT", phases)
+        self.assertIn("PRE_PRODUCTION", phases)
+        self.assertIn("PRODUCTION", phases)
+        self.assertIn("POST_PRODUCTION", phases)
+        self.assertIn("DELIVERY", phases)
+
+        # Verify DB records
+        self.assertEqual(ProductionMilestone.objects.filter(screenplay=self.screenplay).count(), 8)
+
 
 

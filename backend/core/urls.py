@@ -18,6 +18,7 @@ from core.views import (
     ProductionBudgetViewSet,
     BudgetCategoryViewSet,
     BudgetLineItemViewSet,
+    ProductionMilestoneViewSet,
 )
 
 router = DefaultRouter()
@@ -42,6 +43,7 @@ router.register(r"audio-spotting-cues", AudioSpottingCueViewSet, basename="audio
 router.register(r"budgets", ProductionBudgetViewSet, basename="productionbudget")
 router.register(r"budget-categories", BudgetCategoryViewSet, basename="budgetcategory")
 router.register(r"budget-line-items", BudgetLineItemViewSet, basename="budgetlineitem")
+router.register(r"milestones", ProductionMilestoneViewSet, basename="productionmilestone")
 
 urlpatterns = [
     path("", include(router.urls)),
