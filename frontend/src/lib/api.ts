@@ -19,6 +19,7 @@ import {
   WorkspaceMembership,
   WorkspaceRole,
   RoleCapabilities,
+  StudioActivityLog,
 } from '@/types/workspace';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -902,6 +903,34 @@ export async function fetchCurrentUserRole(
     },
     membership: raw.membership,
   };
+}
+
+export async function fetchActivityLogs(
+  workspaceId: string,
+  department?: string,
+  actionType?: string
+): Promise<StudioActivityLog[]> {
+  const url = new URL(`${API_BASE_URL}/activity-logs/`);
+  url.searchParams.set('workspace', workspaceId);
+  if (department && department !== 'ALL') {
+    url.searchParams.set('department', department);
+  }
+  if (actionType && actionType !== 'ALL') {
+    url.searchParams.set('action_type', actionType);
+  }
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  return handleResponse<StudioActivityLog[]>(res);
+}
+
+export async function createActivityLog(
+  data: Partial<StudioActivityLog> & { workspace: string; actor_name: string; action_type: string; description: string }
+): Promise<StudioActivityLog> {
+  const res = await fetch(`${API_BASE_URL}/activity-logs/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<StudioActivityLog>(res);
 }
 
 

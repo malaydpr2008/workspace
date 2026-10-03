@@ -98,6 +98,8 @@ export const ProductionBudgetView: React.FC<ProductionBudgetViewProps> = ({ scre
     createBudgetLineItemItem,
     updateBudgetLineItemItem,
     deleteBudgetLineItemItem,
+    currentUserRole,
+    logStudioAction,
   } = useWorkspaceStore();
 
   const [isPopulating, setIsPopulating] = useState(false);
@@ -168,6 +170,16 @@ export const ProductionBudgetView: React.FC<ProductionBudgetViewProps> = ({ scre
     setIsPopulating(true);
     try {
       await autoPopulateBudget(activeBudget.id);
+      if (currentWorkspace?.id) {
+        logStudioAction({
+          workspace: currentWorkspace.id,
+          actor_name: currentUserRole === 'OWNER' ? 'Studio Producer' : `${currentUserRole} Lead`,
+          actor_role: currentUserRole,
+          action_type: 'BUDGET_UPDATE',
+          department: 'BUDGET',
+          description: `Auto-populated budget line items from Cast DOOD, Stripboard shoot schedule, and Breakdown elements`,
+        });
+      }
     } finally {
       setIsPopulating(false);
     }
@@ -207,6 +219,18 @@ export const ProductionBudgetView: React.FC<ProductionBudgetViewProps> = ({ scre
       },
       activeBudget.id
     );
+
+    if (currentWorkspace?.id) {
+      logStudioAction({
+        workspace: currentWorkspace.id,
+        actor_name: currentUserRole === 'OWNER' ? 'Studio Line Producer' : `${currentUserRole} Lead`,
+        actor_role: currentUserRole,
+        action_type: 'BUDGET_UPDATE',
+        department: 'BUDGET',
+        description: `Added line item "${newItemDesc.trim()}" (Code: ${newItemAccount.trim() || '1001'}) at $${parseFloat(newItemRate) || 0} (${newItemRateType})`,
+      });
+    }
+
     setSelectedCategoryForNewItem(null);
     setNewItemDesc('');
     setNewItemAccount('');

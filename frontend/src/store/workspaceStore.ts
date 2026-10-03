@@ -21,6 +21,8 @@ import {
   WorkspaceMembership,
   WorkspaceRole,
   RoleCapabilities,
+  StudioActivityLog,
+  CollaboratorPresence,
 } from '@/types/workspace';
 import {
   fetchWorkspaces,
@@ -93,6 +95,8 @@ import {
   updateMembership,
   deleteMembership,
   fetchCurrentUserRole,
+  fetchActivityLogs,
+  createActivityLog,
 } from '@/lib/api';
 
 export function getRoleCapabilities(role: WorkspaceRole): RoleCapabilities {
@@ -328,6 +332,25 @@ interface WorkspaceState {
   deleteMemberItem: (id: string) => Promise<void>;
   setCurrentUserRole: (role: WorkspaceRole) => void;
   loadCurrentUserRole: (workspaceId: string, email?: string) => Promise<void>;
+  collaborators: CollaboratorPresence[];
+  activityLogs: StudioActivityLog[];
+  loadActivityLogs: (
+    workspaceId: string,
+    department?: string,
+    actionType?: string
+  ) => Promise<StudioActivityLog[]>;
+  logStudioAction: (
+    actionData: Partial<StudioActivityLog> & {
+      workspace: string;
+      actor_name: string;
+      action_type: string;
+      description: string;
+      department?: string;
+      target_node?: string | null;
+    }
+  ) => Promise<StudioActivityLog | null>;
+  updateCollaboratorPresence: (collaborator: CollaboratorPresence) => void;
+  removeCollaborator: (userId: string) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -353,6 +376,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activeBudgetId: null,
   milestones: [],
   memberships: [],
+  collaborators: [],
+  activityLogs: [],
   currentUserRole: 'OWNER',
   currentCapabilities: {
     canEditScript: true,
@@ -1951,5 +1976,51 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       console.error('Failed to load current user role', err);
     }
   },
+
+  loadActivityLogs: async (workspaceId, department, actionType) => {
+    try {
+      const logs = await fetchActivityLogs(workspaceId, department, actionType);
+      set({ activityLogs: logs });
+      return logs;
+    } catch (err) {
+      console.error('Failed to load activity logs', err);
+      return [];
+    }
+  },
+
+  logStudioAction: async (actionData) => {
+    try {
+      const created = await createActivityLog(actionData);
+      set((state) => ({
+        activityLogs: [created, ...state.activityLogs],
+      }));
+      return created;
+    } catch (err) {
+      console.error('Failed to create activity log', err);
+      return null;
+    }
+  },
+
+  updateCollaboratorPresence: (collaborator) => {
+    set((state) => {
+      const existingIndex = state.collaborators.findIndex(
+        (c) => c.userId === collaborator.userId
+      );
+      if (existingIndex >= 0) {
+        const next = [...state.collaborators];
+        next[existingIndex] = collaborator;
+        return { collaborators: next };
+      } else {
+        return { collaborators: [...state.collaborators, collaborator] };
+      }
+    });
+  },
+
+  removeCollaborator: (userId) => {
+    set((state) => ({
+      collaborators: state.collaborators.filter((c) => c.userId !== userId),
+    }));
+  },
 }));
+
 

@@ -19,6 +19,7 @@ from core.models import (
     BudgetLineItem,
     ProductionMilestone,
     WorkspaceMembership,
+    StudioActivityLog,
 )
 
 
@@ -553,6 +554,28 @@ class WorkspaceMembershipSerializer(serializers.ModelSerializer):
     def get_capabilities(self, obj):
         from core.permissions import RolePermissionPolicy
         return RolePermissionPolicy.get_capabilities(obj.role)
+
+
+class StudioActivityLogSerializer(serializers.ModelSerializer):
+    workspace_name = serializers.CharField(source="workspace.name", read_only=True)
+    target_node_title = serializers.CharField(source="target_node.title", read_only=True)
+
+    class Meta:
+        model = StudioActivityLog
+        fields = [
+            "id",
+            "workspace",
+            "workspace_name",
+            "actor_name",
+            "actor_role",
+            "action_type",
+            "department",
+            "description",
+            "target_node",
+            "target_node_title",
+            "created_at",
+        ]
+        read_only_fields = ["id", "workspace_name", "target_node_title", "created_at"]
 
 
 

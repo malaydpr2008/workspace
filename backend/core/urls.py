@@ -20,6 +20,7 @@ from core.views import (
     BudgetLineItemViewSet,
     ProductionMilestoneViewSet,
     WorkspaceMembershipViewSet,
+    StudioActivityLogViewSet,
 )
 
 router = DefaultRouter()
@@ -46,6 +47,7 @@ router.register(r"budget-categories", BudgetCategoryViewSet, basename="budgetcat
 router.register(r"budget-line-items", BudgetLineItemViewSet, basename="budgetlineitem")
 router.register(r"milestones", ProductionMilestoneViewSet, basename="productionmilestone")
 router.register(r"memberships", WorkspaceMembershipViewSet, basename="workspacemembership")
+router.register(r"activity-logs", StudioActivityLogViewSet, basename="studioactivitylog")
 
 urlpatterns = [
     path("", include(router.urls)),

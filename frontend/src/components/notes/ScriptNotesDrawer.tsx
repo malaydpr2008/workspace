@@ -14,6 +14,7 @@ import {
   WorkspaceNode,
   NoteCategory,
   AuthorRole,
+  WorkspaceRole,
 } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -87,6 +88,9 @@ export const ScriptNotesDrawer: React.FC<ScriptNotesDrawerProps> = ({
     createScriptNoteItem,
     toggleResolveScriptNoteItem,
     deleteScriptNoteItem,
+    currentWorkspace,
+    currentUserRole,
+    logStudioAction,
   } = useWorkspaceStore();
 
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
@@ -148,6 +152,19 @@ export const ScriptNotesDrawer: React.FC<ScriptNotesDrawerProps> = ({
         category: newCategory,
         text: newNoteText.trim(),
       });
+
+      if (currentWorkspace?.id) {
+        logStudioAction({
+          workspace: currentWorkspace.id,
+          actor_name: newAuthorName.trim() || 'Reviewer',
+          actor_role: (newAuthorRole as unknown as WorkspaceRole) || currentUserRole,
+          action_type: 'NOTE_ADDED',
+          department: newCategory === 'LEGAL' ? 'LEGAL' : newCategory === 'PRODUCTION' ? 'PRODUCTION' : 'SCRIPT',
+          description: `Added ${newCategory} note on ${activeNode.title || 'Scene'}: "${newNoteText.trim().slice(0, 45)}..."`,
+          target_node: activeNode.id,
+        });
+      }
+
       setNewNoteText('');
     } catch (err) {
       console.error('Failed to create script note', err);
@@ -177,7 +194,21 @@ export const ScriptNotesDrawer: React.FC<ScriptNotesDrawerProps> = ({
 
   const handleToggleResolve = async (noteId: string) => {
     if (!activeNode) return;
+    const targetNote = rawNotes.find((n) => n.id === noteId);
+    const willBeResolved = targetNote ? !targetNote.is_resolved : true;
     await toggleResolveScriptNoteItem(noteId, activeNode.id);
+
+    if (currentWorkspace?.id && targetNote) {
+      logStudioAction({
+        workspace: currentWorkspace.id,
+        actor_name: currentUserRole === 'OWNER' ? 'Studio Supervisor' : `${currentUserRole} Lead`,
+        actor_role: currentUserRole,
+        action_type: willBeResolved ? 'NOTE_RESOLVED' : 'NOTE_ADDED',
+        department: targetNote.category === 'LEGAL' ? 'LEGAL' : 'SCRIPT',
+        description: `${willBeResolved ? 'Resolved' : 'Reopened'} ${targetNote.category} note: "${targetNote.text.slice(0, 40)}..."`,
+        target_node: activeNode.id,
+      });
+    }
   };
 
   const handleDeleteNote = async (noteId: string) => {

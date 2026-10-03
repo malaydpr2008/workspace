@@ -27,6 +27,7 @@ import {
   LayoutDashboard,
   Lock,
   Users,
+  Activity,
 } from 'lucide-react';
 import { WorkspaceNode, Shot, RevisionColor } from '@/types/workspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -58,6 +59,7 @@ import { AudioSpottingDrawer } from '@/components/audio/AudioSpottingDrawer';
 import { ProductionBudgetView } from '@/components/budget/ProductionBudgetView';
 import { StudioCommandCenterView } from '@/components/dashboard/StudioCommandCenterView';
 import { TeamManagementModal } from '@/components/team/TeamManagementModal';
+import { StudioActivityDrawer } from '@/components/activity/StudioActivityDrawer';
 import { exportProductionBibleZip } from '@/lib/productionBible';
 import {
   getRevisionConfig,
@@ -102,6 +104,8 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     uploadShotStoryboard,
     currentUserRole,
     currentCapabilities,
+    collaborators,
+    logStudioAction,
   } = useWorkspaceStore();
 
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
@@ -114,6 +118,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
 
   // Script Marginalia / Review Notes Drawer & Take Logger State
   const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState(false);
@@ -214,6 +219,19 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
       is_locked: nextLocked,
       properties: { ...node.properties, is_locked: nextLocked },
     });
+    if (currentWorkspace?.id) {
+      logStudioAction({
+        workspace: currentWorkspace.id,
+        actor_name: currentUserRole === 'OWNER' ? 'Studio Executive' : `${currentUserRole} Lead`,
+        actor_role: currentUserRole,
+        action_type: 'SCENE_LOCK',
+        department: 'SCRIPT',
+        description: nextLocked
+          ? `Locked scene numbers in ${node.title || 'Screenplay'} (Industry Production Order A1, 1, 1A)`
+          : `Unlocked scene numbers in ${node.title || 'Screenplay'}`,
+        target_node: node.id,
+      });
+    }
   };
 
   const handleAddScene = async (afterSceneId?: string) => {
@@ -709,6 +727,16 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             )}
           </button>
 
+          {/* Studio Activity Audit Stream Drawer Toggle */}
+          <button
+            onClick={() => setIsActivityDrawerOpen(true)}
+            className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-mono font-medium transition-all"
+            title="View live studio activity stream and audit log"
+          >
+            <Activity className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Activity</span>
+          </button>
+
           {/* Export Dropdown */}
           <DocumentExportButton
             primaryLabel="Export Fountain (.fountain)"
@@ -983,6 +1011,8 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                     const characterName =
                       block.properties?.character_name || character?.name || 'CHARACTER';
                     const blockBreakdownElements = getBlockBreakdownElements(block.id);
+                    const remoteCollaborators = collaborators.filter((c) => c.focusedBlockId === block.id);
+                    const hasRemoteFocus = remoteCollaborators.length > 0;
 
                     if (block.type === 'action') {
                       const isRevised = Boolean(
@@ -996,11 +1026,27 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                         <div
                           key={block.id}
                           className={`screenplay-action-block group relative p-4 rounded-lg font-mono text-sm leading-relaxed transition-all duration-200 ${
+                            hasRemoteFocus ? 'border-l-4 border-l-sky-500 bg-sky-950/20' : ''
+                          } ${
                             isCovered
                               ? 'bg-cyan-950/30 border border-cyan-500/60 shadow-sm shadow-cyan-950 text-cyan-100'
                               : 'text-slate-300 bg-slate-900/20 border border-transparent hover:border-slate-800 hover:bg-slate-900/40'
                           }`}
                         >
+                          {/* Remote Collaborators Focused Indicator */}
+                          {hasRemoteFocus && (
+                            <div className="no-print flex items-center gap-1.5 mb-2">
+                              {remoteCollaborators.map((c) => (
+                                <div
+                                  key={c.userId}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-sky-950/90 border border-sky-500/70 text-sky-200 shadow-sm animate-pulse"
+                                >
+                                  <span>{c.userRole === 'DIRECTOR' ? '🎬' : c.userRole === 'PRODUCER' ? '💼' : '✍️'}</span>
+                                  <span className="font-semibold">{c.userName} ({c.userRole}) editing...</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           {/* Right Margin Revision Asterisk */}
                           <div
                             onClick={() => {
@@ -1182,11 +1228,27 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                         <div
                           key={block.id}
                           className={`screenplay-dialogue-block group relative p-5 rounded-lg transition-all duration-200 ${
+                            hasRemoteFocus ? 'border-l-4 border-l-sky-500 bg-sky-950/20' : ''
+                          } ${
                             isCovered
                               ? 'bg-blue-950/40 border border-cyan-400/60 ring-1 ring-cyan-400/20 shadow-lg shadow-cyan-950/40'
-                              : 'bg-slate-900/20 border border-transparent hover:border-slate-800 hover:bg-slate-900/40'
+                              : 'text-slate-300 bg-slate-900/20 border border-transparent hover:border-slate-800 hover:bg-slate-900/40'
                           }`}
                         >
+                          {/* Remote Collaborators Focused Indicator */}
+                          {hasRemoteFocus && (
+                            <div className="no-print flex items-center gap-1.5 mb-2">
+                              {remoteCollaborators.map((c) => (
+                                <div
+                                  key={c.userId}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-sky-950/90 border border-sky-500/70 text-sky-200 shadow-sm animate-pulse"
+                                >
+                                  <span>{c.userRole === 'DIRECTOR' ? '🎬' : c.userRole === 'PRODUCER' ? '💼' : '✍️'}</span>
+                                  <span className="font-semibold">{c.userName} ({c.userRole}) editing...</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           {/* Right Margin Revision Asterisk */}
                           <div
                             onClick={() => {
@@ -1903,6 +1965,16 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         onClose={() => setIsTeamModalOpen(false)}
         workspaceId={currentWorkspace?.id || ''}
         workspaceName={currentWorkspace?.name}
+      />
+
+      {/* Studio Activity Audit Stream Drawer */}
+      <StudioActivityDrawer
+        isOpen={isActivityDrawerOpen}
+        onClose={() => setIsActivityDrawerOpen(false)}
+        onSelectNode={(nodeId) => {
+          setUserSelectedSceneId(nodeId);
+          setViewMode('editor');
+        }}
       />
     </div>
   );

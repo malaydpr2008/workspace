@@ -4,3 +4,5 @@ django-cors-headers>=4.3.1
 psycopg[binary]>=3.1.18
 dj-database-url>=2.1.0
 gunicorn>=21.2.0
+channels>=4.0.0
+daphne>=4.0.0

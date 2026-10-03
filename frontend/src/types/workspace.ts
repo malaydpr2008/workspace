@@ -352,6 +352,47 @@ export interface WorkspaceMembership {
   created_at: string;
 }
 
+export type ActivityActionType =
+  | 'SCRIPT_EDIT'
+  | 'SCENE_LOCK'
+  | 'NOTE_ADDED'
+  | 'NOTE_RESOLVED'
+  | 'TAKE_LOGGED'
+  | 'BUDGET_UPDATE'
+  | 'MEMBER_INVITED'
+  | string;
+
+export type ActivityDepartment =
+  | 'ALL'
+  | 'SCRIPT'
+  | 'PRODUCTION'
+  | 'BUDGET'
+  | 'LEGAL'
+  | 'SOUND'
+  | string;
+
+export interface StudioActivityLog {
+  id: string;
+  workspace: string;
+  workspace_name?: string;
+  actor_name: string;
+  actor_role: WorkspaceRole | string;
+  action_type: ActivityActionType;
+  department: ActivityDepartment;
+  description: string;
+  target_node?: string | null;
+  target_node_title?: string | null;
+  created_at: string;
+}
+
+export interface CollaboratorPresence {
+  userId: string;
+  userName: string;
+  userRole: WorkspaceRole;
+  focusedBlockId?: string | null;
+  lastSeen: number;
+}
+
 
 
 

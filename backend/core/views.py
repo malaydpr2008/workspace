@@ -25,6 +25,7 @@ from core.models import (
     BudgetLineItem,
     ProductionMilestone,
     WorkspaceMembership,
+    StudioActivityLog,
 )
 from core.serializers import (
     WorkspaceSerializer,
@@ -46,6 +47,7 @@ from core.serializers import (
     BudgetLineItemSerializer,
     ProductionMilestoneSerializer,
     WorkspaceMembershipSerializer,
+    StudioActivityLogSerializer,
 )
 from core.permissions import RolePermissionPolicy
 
@@ -941,6 +943,24 @@ class WorkspaceMembershipViewSet(viewsets.ModelViewSet):
             "capabilities": RolePermissionPolicy.get_capabilities(role),
             "membership": None,
         })
+
+
+class StudioActivityLogViewSet(viewsets.ModelViewSet):
+    queryset = StudioActivityLog.objects.all().select_related("workspace", "target_node")
+    serializer_class = StudioActivityLogSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        workspace_id = self.request.query_params.get("workspace")
+        if workspace_id:
+            qs = qs.filter(workspace_id=workspace_id)
+        department = self.request.query_params.get("department")
+        if department:
+            qs = qs.filter(department__iexact=department)
+        action_type = self.request.query_params.get("action_type")
+        if action_type:
+            qs = qs.filter(action_type__iexact=action_type)
+        return qs
 
 
 

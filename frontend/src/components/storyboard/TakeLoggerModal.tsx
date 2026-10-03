@@ -34,6 +34,9 @@ export const TakeLoggerModal: React.FC<TakeLoggerModalProps> = ({
     createProductionTakeItem,
     toggleCircleTakeItem,
     deleteProductionTakeItem,
+    currentWorkspace,
+    currentUserRole,
+    logStudioAction,
   } = useWorkspaceStore();
 
   // New Take Form State
@@ -100,6 +103,18 @@ export const TakeLoggerModal: React.FC<TakeLoggerModalProps> = ({
         is_circle_take: isCircleTake,
       });
 
+      if (currentWorkspace?.id) {
+        logStudioAction({
+          workspace: currentWorkspace.id,
+          actor_name: currentUserRole === 'OWNER' ? 'Script Supervisor' : `${currentUserRole} Lead`,
+          actor_role: currentUserRole,
+          action_type: 'TAKE_LOGGED',
+          department: 'PRODUCTION',
+          description: `Logged Take ${currentTakeNumber}${isCircleTake ? ' ⭐ (Circle Take)' : ''} on Shot ${shot.shot_number} (${shot.shot_type || 'Standard'}) - ${scene?.title || 'Scene'}`,
+          target_node: scene?.id || null,
+        });
+      }
+
       setTakeNumberOverride(null);
       setNotes('');
       setIsCircleTake(false);
@@ -112,7 +127,21 @@ export const TakeLoggerModal: React.FC<TakeLoggerModalProps> = ({
 
   const handleToggleCircle = async (takeId: string) => {
     if (!shot) return;
+    const targetTake = takes.find((t) => t.id === takeId);
+    const willBeCircle = targetTake ? !targetTake.is_circle_take : true;
     await toggleCircleTakeItem(takeId, shot.id);
+
+    if (currentWorkspace?.id) {
+      logStudioAction({
+        workspace: currentWorkspace.id,
+        actor_name: currentUserRole === 'OWNER' ? 'Director' : `${currentUserRole} Lead`,
+        actor_role: currentUserRole,
+        action_type: 'TAKE_LOGGED',
+        department: 'PRODUCTION',
+        description: `${willBeCircle ? 'Starred' : 'Unstarred'} Circle Take ⭐ (Take ${targetTake?.take_number || ''}) on Shot ${shot.shot_number} (${shot.shot_type || 'Standard'}) - ${scene?.title || 'Scene'}`,
+        target_node: scene?.id || null,
+      });
+    }
   };
 
   const handleDeleteTake = async (takeId: string) => {

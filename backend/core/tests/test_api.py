@@ -21,6 +21,7 @@ from core.models import (
     BudgetLineItem,
     ProductionMilestone,
     WorkspaceMembership,
+    StudioActivityLog,
 )
 from core.permissions import RolePermissionPolicy
 
@@ -998,6 +999,117 @@ class WorkspaceMembershipAndRBACAPITests(APITestCase):
         self.assertEqual(resp2.status_code, status.HTTP_200_OK)
         self.assertEqual(resp2.data["role"], "OWNER")
         self.assertTrue(resp2.data["capabilities"]["can_edit_budget"])
+
+
+class StudioActivityLogAndWebSocketAPITests(APITestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Live Studio", slug="live-studio")
+        self.scene = WorkspaceNode.objects.create(
+            workspace=self.workspace,
+            type="scene",
+            title="EXT. ROOFTOP - DUSK",
+            rank="0|h0:",
+        )
+
+    def test_activity_log_creation_and_filtering(self):
+        url = reverse("studioactivitylog-list")
+
+        # 1. Create activity log via API
+        payload = {
+            "workspace": str(self.workspace.id),
+            "actor_name": "Emma Thomas",
+            "actor_role": "PRODUCER",
+            "action_type": "BUDGET_UPDATE",
+            "department": "BUDGET",
+            "description": "Approved contingency increase of 10%",
+            "target_node": str(self.scene.id),
+        }
+        create_resp = self.client.post(url, payload, format="json")
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(create_resp.data["actor_name"], "Emma Thomas")
+        self.assertEqual(create_resp.data["department"], "BUDGET")
+        self.assertEqual(create_resp.data["target_node_title"], "EXT. ROOFTOP - DUSK")
+
+        # 2. Create another log in SCRIPT department
+        StudioActivityLog.objects.create(
+            workspace=self.workspace,
+            actor_name="Christopher Nolan",
+            actor_role="DIRECTOR",
+            action_type="SCENE_LOCK",
+            department="SCRIPT",
+            description="Locked Scene 1 numbers to (1A)",
+            target_node=self.scene,
+        )
+
+        # 3. Filter by department=BUDGET
+        budget_resp = self.client.get(f"{url}?workspace={self.workspace.id}&department=BUDGET")
+        self.assertEqual(budget_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(budget_resp.data), 1)
+        self.assertEqual(budget_resp.data[0]["action_type"], "BUDGET_UPDATE")
+
+        # 4. Filter by department=SCRIPT
+        script_resp = self.client.get(f"{url}?workspace={self.workspace.id}&department=SCRIPT")
+        self.assertEqual(script_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(script_resp.data), 1)
+        self.assertEqual(script_resp.data[0]["action_type"], "SCENE_LOCK")
+
+        # 5. Filter by action_type=SCENE_LOCK
+        lock_resp = self.client.get(f"{url}?workspace={self.workspace.id}&action_type=SCENE_LOCK")
+        self.assertEqual(lock_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(lock_resp.data), 1)
+
+    def test_websocket_consumer_flow(self):
+        from asgiref.sync import async_to_sync
+        from channels.testing import WebsocketCommunicator
+        from core.consumers import WorkspaceConsumer
+
+        async def _test():
+            communicator = WebsocketCommunicator(
+                WorkspaceConsumer.as_asgi(), f"/ws/workspace/{self.workspace.id}/"
+            )
+            communicator.scope["url_route"] = {"kwargs": {"workspace_id": str(self.workspace.id)}}
+            connected, _ = await communicator.connect()
+            self.assertTrue(connected)
+
+            # Receive initial connection message
+            response = await communicator.receive_json_from()
+            self.assertEqual(response["action"], "connected")
+            self.assertEqual(response["workspace_id"], str(self.workspace.id))
+
+            # Test ping / pong
+            await communicator.send_json_to({"action": "ping"})
+            response = await communicator.receive_json_from()
+            self.assertEqual(response["action"], "pong")
+
+            # Test presence update broadcast
+            await communicator.send_json_to({
+                "action": "presence_update",
+                "user_id": "usr-director-1",
+                "user_name": "Director Nolan",
+                "user_role": "DIRECTOR",
+                "focused_block_id": str(self.scene.id),
+            })
+            response = await communicator.receive_json_from()
+            self.assertEqual(response["action"], "presence_update")
+            self.assertEqual(response["user_name"], "Director Nolan")
+            self.assertEqual(response["focused_block_id"], str(self.scene.id))
+
+            # Test broadcast mutation
+            await communicator.send_json_to({
+                "action": "broadcast_mutation",
+                "mutation_type": "SCENE_LOCK",
+                "payload": {"scene_id": str(self.scene.id), "scene_number": "1A"},
+                "actor_name": "Director Nolan",
+                "actor_role": "DIRECTOR",
+            })
+            response = await communicator.receive_json_from()
+            self.assertEqual(response["action"], "broadcast_mutation")
+            self.assertEqual(response["mutation_type"], "SCENE_LOCK")
+            self.assertEqual(response["payload"]["scene_number"], "1A")
+
+            await communicator.disconnect()
+
+        async_to_sync(_test)()
 
 
 
