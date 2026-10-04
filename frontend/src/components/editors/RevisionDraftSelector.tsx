@@ -10,7 +10,6 @@ interface RevisionDraftSelectorProps {
   onSelectColor: (color: RevisionColor) => void;
   isLocked?: boolean;
   onToggleLock: () => void;
-  canLock?: boolean;
 }
 
 export const RevisionDraftSelector: React.FC<RevisionDraftSelectorProps> = ({
@@ -18,7 +17,6 @@ export const RevisionDraftSelector: React.FC<RevisionDraftSelectorProps> = ({
   onSelectColor,
   isLocked = false,
   onToggleLock,
-  canLock = true,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -98,19 +96,14 @@ export const RevisionDraftSelector: React.FC<RevisionDraftSelectorProps> = ({
 
       {/* Lock Scene Numbers Toggle */}
       <button
-        onClick={canLock ? onToggleLock : undefined}
-        disabled={!canLock}
+        onClick={onToggleLock}
         className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono font-medium transition-all ${
-          !canLock
-            ? 'opacity-40 cursor-not-allowed bg-slate-900/40 text-slate-500 border-slate-800'
-            : isLocked
+          isLocked
             ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25 shadow-sm'
             : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800/80'
         }`}
         title={
-          !canLock
-            ? 'Permission Locked: Only Directors, Producers, or Studio Owners can lock scene numbers'
-            : isLocked
+          isLocked
             ? 'Scene Numbers Locked: Inserted scenes will use alphanumeric numbering (1A, 1B)'
             : 'Click to Lock Scene Numbers for Pre-Production'
         }

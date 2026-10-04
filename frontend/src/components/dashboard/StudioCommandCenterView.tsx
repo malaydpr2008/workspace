@@ -66,7 +66,6 @@ export const StudioCommandCenterView: React.FC<StudioCommandCenterViewProps> = (
     loadBreakdownElements,
     loadNotesForWorkspace,
     loadADRCues,
-    currentCapabilities,
   } = useWorkspaceStore();
 
   const [activeTimelineTab, setActiveTimelineTab] = useState<'kpi' | 'timeline' | 'both'>('both');
@@ -288,16 +287,14 @@ export const StudioCommandCenterView: React.FC<StudioCommandCenterViewProps> = (
                 <Calendar className="w-3.5 h-3.5 text-sky-400" />
                 <span>Schedule ({totalShootDays}d)</span>
               </button>
-              {currentCapabilities.canEditBudget && (
-                <button
-                  onClick={() => onJumpToTab('budget')}
-                  className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-mono transition-colors border border-slate-700"
-                  title="Jump to Production Budget Ledger"
-                >
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Budget Ledger</span>
-                </button>
-              )}
+              <button
+                onClick={() => onJumpToTab('budget')}
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-mono transition-colors border border-slate-700"
+                title="Jump to Production Budget Ledger"
+              >
+                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Budget Ledger</span>
+              </button>
               <button
                 onClick={() => onJumpToTab('adr')}
                 className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-mono transition-colors border border-slate-700"
@@ -692,7 +689,7 @@ export const StudioCommandCenterView: React.FC<StudioCommandCenterViewProps> = (
                       <DollarSign className="w-4 h-4 text-emerald-400" />
                       <span>Financial Top-Sheet</span>
                     </h3>
-                    {onJumpToTab && currentCapabilities.canEditBudget && (
+                    {onJumpToTab && (
                       <button
                         onClick={() => onJumpToTab('budget')}
                         className="text-[11px] font-mono text-emerald-400 hover:text-emerald-300 flex items-center space-x-1"

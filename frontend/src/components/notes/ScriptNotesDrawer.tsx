@@ -89,7 +89,6 @@ export const ScriptNotesDrawer: React.FC<ScriptNotesDrawerProps> = ({
     toggleResolveScriptNoteItem,
     deleteScriptNoteItem,
     currentWorkspace,
-    currentUserRole,
     logStudioAction,
   } = useWorkspaceStore();
 
@@ -157,7 +156,7 @@ export const ScriptNotesDrawer: React.FC<ScriptNotesDrawerProps> = ({
         logStudioAction({
           workspace: currentWorkspace.id,
           actor_name: newAuthorName.trim() || 'Reviewer',
-          actor_role: (newAuthorRole as unknown as WorkspaceRole) || currentUserRole,
+          actor_role: (newAuthorRole as unknown as WorkspaceRole) || 'OWNER',
           action_type: 'NOTE_ADDED',
           department: newCategory === 'LEGAL' ? 'LEGAL' : newCategory === 'PRODUCTION' ? 'PRODUCTION' : 'SCRIPT',
           description: `Added ${newCategory} note on ${activeNode.title || 'Scene'}: "${newNoteText.trim().slice(0, 45)}..."`,
@@ -201,8 +200,8 @@ export const ScriptNotesDrawer: React.FC<ScriptNotesDrawerProps> = ({
     if (currentWorkspace?.id && targetNote) {
       logStudioAction({
         workspace: currentWorkspace.id,
-        actor_name: currentUserRole === 'OWNER' ? 'Studio Supervisor' : `${currentUserRole} Lead`,
-        actor_role: currentUserRole,
+        actor_name: 'Studio Supervisor',
+        actor_role: 'OWNER',
         action_type: willBeResolved ? 'NOTE_RESOLVED' : 'NOTE_ADDED',
         department: targetNote.category === 'LEGAL' ? 'LEGAL' : 'SCRIPT',
         description: `${willBeResolved ? 'Resolved' : 'Reopened'} ${targetNote.category} note: "${targetNote.text.slice(0, 40)}..."`,

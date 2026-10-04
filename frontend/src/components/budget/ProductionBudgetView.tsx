@@ -98,7 +98,6 @@ export const ProductionBudgetView: React.FC<ProductionBudgetViewProps> = ({ scre
     createBudgetLineItemItem,
     updateBudgetLineItemItem,
     deleteBudgetLineItemItem,
-    currentUserRole,
     logStudioAction,
   } = useWorkspaceStore();
 
@@ -173,8 +172,8 @@ export const ProductionBudgetView: React.FC<ProductionBudgetViewProps> = ({ scre
       if (currentWorkspace?.id) {
         logStudioAction({
           workspace: currentWorkspace.id,
-          actor_name: currentUserRole === 'OWNER' ? 'Studio Producer' : `${currentUserRole} Lead`,
-          actor_role: currentUserRole,
+          actor_name: 'Studio Producer',
+          actor_role: 'OWNER',
           action_type: 'BUDGET_UPDATE',
           department: 'BUDGET',
           description: `Auto-populated budget line items from Cast DOOD, Stripboard shoot schedule, and Breakdown elements`,
@@ -223,8 +222,8 @@ export const ProductionBudgetView: React.FC<ProductionBudgetViewProps> = ({ scre
     if (currentWorkspace?.id) {
       logStudioAction({
         workspace: currentWorkspace.id,
-        actor_name: currentUserRole === 'OWNER' ? 'Studio Line Producer' : `${currentUserRole} Lead`,
-        actor_role: currentUserRole,
+        actor_name: 'Studio Line Producer',
+        actor_role: 'OWNER',
         action_type: 'BUDGET_UPDATE',
         department: 'BUDGET',
         description: `Added line item "${newItemDesc.trim()}" (Code: ${newItemAccount.trim() || '1001'}) at $${parseFloat(newItemRate) || 0} (${newItemRateType})`,

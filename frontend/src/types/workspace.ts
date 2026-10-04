@@ -325,17 +325,6 @@ export type WorkspaceRole =
   | 'DEPT_HEAD'
   | 'ACTOR';
 
-export interface RoleCapabilities {
-  canEditScript: boolean;
-  canEditBudget: boolean;
-  canLockScenes: boolean;
-  canManageMembers: boolean;
-  canManageBudget?: boolean;
-  canManageSchedule?: boolean;
-  canManageTeam?: boolean;
-  canAddNotes?: boolean;
-}
-
 
 
 export type ActivityActionType =

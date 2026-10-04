@@ -6,7 +6,7 @@ import { WorkspaceSidebar } from './tree/WorkspaceSidebar';
 import { NodeDispatcher } from './NodeDispatcher';
 import { CommandPalette } from './navigation/CommandPalette';
 import { StudioActivityDrawer } from './activity/StudioActivityDrawer';
-import { AlertCircle, RefreshCw, X, Shield, Activity } from 'lucide-react';
+import { AlertCircle, RefreshCw, X, Activity } from 'lucide-react';
 import { WorkspaceRole, WorkspaceNode } from '@/types/workspace';
 import { createWorkspaceSocket, WorkspaceSocketClient } from '@/lib/websocket';
 
@@ -44,8 +44,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     currentWorkspace,
     lastError,
     clearLastError,
-    currentUserRole,
-    loadCurrentUserRole,
     collaborators,
     updateCollaboratorPresence,
     removeCollaborator,
@@ -62,12 +60,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
   useEffect(() => {
     loadWorkspace(slug);
   }, [slug, loadWorkspace]);
-
-  useEffect(() => {
-    if (currentWorkspace?.id) {
-      loadCurrentUserRole(currentWorkspace.id);
-    }
-  }, [currentWorkspace?.id, loadCurrentUserRole]);
 
   // Real-time WebSocket Presence & Live Sync
   useEffect(() => {
@@ -104,7 +96,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     wsClient.sendPresence({
       userId: localUserIdRef.current,
       userName: 'Solo Creator',
-      userRole: currentUserRole || 'OWNER',
+      userRole: 'OWNER',
       focusedBlockId: selectedNodeId,
     });
 
@@ -113,7 +105,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
       wsClient.sendPresence({
         userId: localUserIdRef.current,
         userName: 'Solo Creator',
-        userRole: currentUserRole || 'OWNER',
+        userRole: 'OWNER',
         focusedBlockId: selectedNodeId,
       });
     }, 15000);
@@ -125,7 +117,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     };
   }, [
     currentWorkspace?.id,
-    currentUserRole,
     selectedNodeId,
     updateCollaboratorPresence,
     removeCollaborator,
@@ -187,17 +178,12 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
 
       {/* Central Canvas with Polymorphic Node Dispatcher */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950">
-        {/* Top Header Bar with Solo Studio Badge & Real-Time Presence */}
+        {/* Top Header Bar with Real-Time Presence */}
         <div className="h-9 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-4 flex items-center justify-between shrink-0 no-print z-20">
           <div className="flex items-center space-x-3 text-xs font-mono">
-            <div className="flex items-center space-x-1.5 px-2.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300">
-              <Shield className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-semibold tracking-wide">Studio Solo Mode</span>
-            </div>
-
             {/* Collaborator Live Presence Avatars */}
-            {collaborators.length > 0 && (
-              <div className="flex items-center space-x-1.5 pl-2 border-l border-slate-800">
+            {collaborators.length > 0 ? (
+              <div className="flex items-center space-x-1.5">
                 <div className="flex items-center -space-x-1.5">
                   {collaborators.map((c) => {
                     const roleStyle = getRoleAvatarStyle(c.userRole);
@@ -223,6 +209,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
                   {collaborators.length} Peer{collaborators.length === 1 ? '' : 's'}
                 </span>
               </div>
+            ) : (
+              <span className="text-[11px] text-slate-500">Connected</span>
             )}
           </div>
 

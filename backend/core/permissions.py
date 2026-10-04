@@ -12,10 +12,3 @@ class IsSoloCreator(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         return True
-
-
-# Backward-compatible aliases for legacy imports
-IsSoloCreatorOrReadOnly = IsSoloCreator
-HasWorkspaceRole = IsSoloCreator
-CanModifyNode = IsSoloCreator
-IsAuthenticatedOrReadOnly = IsSoloCreator

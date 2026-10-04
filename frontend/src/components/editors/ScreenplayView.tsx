@@ -101,8 +101,6 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     saveStatus,
     untagBlockFromElement,
     uploadShotStoryboard,
-    currentUserRole,
-    currentCapabilities,
     collaborators,
     logStudioAction,
   } = useWorkspaceStore();
@@ -220,8 +218,8 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     if (currentWorkspace?.id) {
       logStudioAction({
         workspace: currentWorkspace.id,
-        actor_name: currentUserRole === 'OWNER' ? 'Studio Executive' : `${currentUserRole} Lead`,
-        actor_role: currentUserRole,
+        actor_name: 'Studio Executive',
+        actor_role: 'OWNER',
         action_type: 'SCENE_LOCK',
         department: 'SCRIPT',
         description: nextLocked
@@ -488,21 +486,21 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
       {/* Top Header Bar */}
-      <div className="h-14 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 flex items-center justify-between shrink-0 no-print">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+      <div className="min-h-14 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-4 md:px-6 py-2 md:py-2.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shrink-0 no-print">
+        <div className="flex items-center space-x-3 min-w-0">
+          <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0">
             <Clapperboard className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-base font-semibold text-white tracking-tight">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-base font-semibold text-white tracking-tight truncate max-w-xs md:max-w-md">
                 {node.title || 'Untitled Screenplay'}
               </h1>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shrink-0">
                 SCREENPLAY
               </span>
             </div>
-            <p className="text-xs text-slate-400 flex items-center space-x-2">
+            <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2 mt-0.5">
               <span>{scenes.length} Scene{scenes.length === 1 ? '' : 's'}</span>
               <span>•</span>
               <span>{shots.length} Shot{shots.length === 1 ? '' : 's'}</span>
@@ -512,19 +510,18 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                   <span>Writer: {node.properties.author}</span>
                 </>
               )}
-            </p>
+            </div>
           </div>
         </div>
 
         {/* Right Header Status, Export & Scene Selector */}
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Hollywood Revision Draft Selector & Scene Lock */}
           <RevisionDraftSelector
             activeColor={activeRevisionColor}
             onSelectColor={handleSelectRevisionColor}
             isLocked={isScreenplayLocked}
             onToggleLock={handleToggleLock}
-            canLock={currentCapabilities.canLockScenes}
           />
 
           {/* Live Auto-save indicator */}
@@ -868,9 +865,8 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                     <input
                       type="text"
                       value={currentScene.title}
-                      readOnly={!currentCapabilities.canEditScript}
                       onChange={(e) => updateNodeTitle(currentScene.id, e.target.value.toUpperCase())}
-                      onKeyDown={currentCapabilities.canEditScript ? handleSceneHeadingKeyDown : undefined}
+                      onKeyDown={handleSceneHeadingKeyDown}
                       placeholder="EXT. NEON ROOFTOP - NIGHT"
                       className="w-full bg-transparent font-mono font-bold text-sm tracking-wide text-white uppercase focus:outline-none placeholder-slate-600"
                     />
@@ -1161,14 +1157,13 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                               blockInputRefs.current[block.id] = el;
                             }}
                             value={block.content}
-                            readOnly={!currentCapabilities.canEditScript}
                             onChange={(e) => {
                               const extra = activeRevisionColor !== 'WHITE'
                                 ? { revision_asterisk: true, revision_color: activeRevisionColor }
                                 : {};
                               updateNodeContent(block.id, e.target.value, extra);
                             }}
-                            onKeyDown={currentCapabilities.canEditScript ? (e) => handleActionKeyDown(e, block, idx) : undefined}
+                            onKeyDown={(e) => handleActionKeyDown(e, block, idx)}
                             placeholder="Describe action, movement, or setting..."
                             rows={Math.max(2, block.content.split('\n').length)}
                             className="w-full bg-transparent resize-none focus:outline-none text-slate-200 placeholder-slate-600 leading-relaxed font-mono"
@@ -1448,14 +1443,13 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                                 blockInputRefs.current[block.id] = el;
                               }}
                               value={block.content}
-                              readOnly={!currentCapabilities.canEditScript}
                               onChange={(e) => {
                                 const extra = activeRevisionColor !== 'WHITE'
                                   ? { revision_asterisk: true, revision_color: activeRevisionColor }
                                   : {};
                                 updateNodeContent(block.id, e.target.value, extra);
                               }}
-                              onKeyDown={currentCapabilities.canEditScript ? (e) => handleDialogueKeyDown(e, block, idx) : undefined}
+                              onKeyDown={(e) => handleDialogueKeyDown(e, block, idx)}
                               placeholder="Spoken dialogue line..."
                               rows={Math.max(2, block.content.split('\n').length)}
                               className="w-full bg-transparent resize-none font-mono text-sm text-center leading-relaxed text-slate-200 focus:outline-none placeholder-slate-600"

@@ -18,8 +18,6 @@ import {
   BudgetCategory,
   BudgetLineItem,
   ProductionMilestone,
-  WorkspaceRole,
-  RoleCapabilities,
   StudioActivityLog,
   CollaboratorPresence,
   ScriptCoverageReport,
@@ -95,22 +93,6 @@ import {
   fetchCoverageReports,
   generateCoverageReport,
 } from '@/lib/api';
-
-export const getSoloCapabilities = (): RoleCapabilities => ({
-  canEditScript: true,
-  canLockScenes: true,
-  canManageBudget: true,
-  canManageSchedule: true,
-  canManageTeam: true,
-  canAddNotes: true,
-  canEditBudget: true,
-  canManageMembers: true,
-});
-
-export function getRoleCapabilities(role?: WorkspaceRole): RoleCapabilities {
-  void role;
-  return getSoloCapabilities();
-}
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -298,10 +280,6 @@ interface WorkspaceState {
   updateMilestoneItem: (id: string, data: Partial<ProductionMilestone>) => Promise<ProductionMilestone | null>;
   deleteMilestoneItem: (id: string) => Promise<void>;
   initDefaultTimeline: (screenplayId: string, workspaceId?: string) => Promise<ProductionMilestone[]>;
-  currentUserRole: WorkspaceRole;
-  currentCapabilities: RoleCapabilities;
-  setCurrentUserRole: (role: WorkspaceRole) => void;
-  loadCurrentUserRole: (workspaceId?: string, email?: string) => Promise<void>;
   collaborators: CollaboratorPresence[];
   activityLogs: StudioActivityLog[];
   loadActivityLogs: (
@@ -357,8 +335,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   collaborators: [],
   activityLogs: [],
   coverageReports: [],
-  currentUserRole: 'OWNER',
-  currentCapabilities: getSoloCapabilities(),
   lastEditedLocally: {},
   nodeVersions: {},
   isLoading: false,
@@ -1999,22 +1975,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       console.error('Failed to initialize default timeline', err);
       return [];
     }
-  },
-
-  setCurrentUserRole: (role: WorkspaceRole) => {
-    set({
-      currentUserRole: role,
-      currentCapabilities: getSoloCapabilities(),
-    });
-  },
-
-  loadCurrentUserRole: async (workspaceId?: string, email?: string) => {
-    void workspaceId;
-    void email;
-    set({
-      currentUserRole: 'OWNER',
-      currentCapabilities: getSoloCapabilities(),
-    });
   },
 
   loadActivityLogs: async (workspaceId, department, actionType) => {

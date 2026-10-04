@@ -182,7 +182,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'core.permissions.IsSoloCreator',
+        'rest_framework.permissions.AllowAny',
     ],
 }
 

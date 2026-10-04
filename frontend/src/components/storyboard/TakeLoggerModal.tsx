@@ -35,7 +35,6 @@ export const TakeLoggerModal: React.FC<TakeLoggerModalProps> = ({
     toggleCircleTakeItem,
     deleteProductionTakeItem,
     currentWorkspace,
-    currentUserRole,
     logStudioAction,
   } = useWorkspaceStore();
 
@@ -106,8 +105,8 @@ export const TakeLoggerModal: React.FC<TakeLoggerModalProps> = ({
       if (currentWorkspace?.id) {
         logStudioAction({
           workspace: currentWorkspace.id,
-          actor_name: currentUserRole === 'OWNER' ? 'Script Supervisor' : `${currentUserRole} Lead`,
-          actor_role: currentUserRole,
+          actor_name: 'Script Supervisor',
+          actor_role: 'OWNER',
           action_type: 'TAKE_LOGGED',
           department: 'PRODUCTION',
           description: `Logged Take ${currentTakeNumber}${isCircleTake ? ' ⭐ (Circle Take)' : ''} on Shot ${shot.shot_number} (${shot.shot_type || 'Standard'}) - ${scene?.title || 'Scene'}`,
@@ -134,8 +133,8 @@ export const TakeLoggerModal: React.FC<TakeLoggerModalProps> = ({
     if (currentWorkspace?.id) {
       logStudioAction({
         workspace: currentWorkspace.id,
-        actor_name: currentUserRole === 'OWNER' ? 'Director' : `${currentUserRole} Lead`,
-        actor_role: currentUserRole,
+        actor_name: 'Director',
+        actor_role: 'OWNER',
         action_type: 'TAKE_LOGGED',
         department: 'PRODUCTION',
         description: `${willBeCircle ? 'Starred' : 'Unstarred'} Circle Take ⭐ (Take ${targetTake?.take_number || ''}) on Shot ${shot.shot_number} (${shot.shot_type || 'Standard'}) - ${scene?.title || 'Scene'}`,
