@@ -25,7 +25,7 @@ from core.models import (
     StudioActivityLog,
     ScriptCoverageReport,
 )
-from core.permissions import RolePermissionPolicy
+from core.permissions import IsSoloCreator
 
 
 class WorkspaceNodeAPITests(APITestCase):
@@ -884,106 +884,21 @@ class ProductionMilestoneAPITests(APITestCase):
         self.assertEqual(ProductionMilestone.objects.filter(screenplay=self.screenplay).count(), 8)
 
 
-class WorkspaceMembershipAndRBACAPITests(APITestCase):
+class SoloStudioSecurityAndPermissionsAPITests(APITestCase):
     def setUp(self):
         self.workspace = Workspace.objects.create(name="Starlight Pictures", slug="starlight-pictures")
         self.other_workspace = Workspace.objects.create(name="Indie Lab", slug="indie-lab")
 
-    def test_role_permission_policy_capabilities(self):
-        """In solo creator mode, all studio capabilities are enabled across all roles."""
-        roles = ["OWNER", "PRODUCER", "DIRECTOR", "WRITER", "DEPT_HEAD", "ACTOR"]
-        for role in roles:
-            self.assertTrue(RolePermissionPolicy.can_edit_script(role))
-            self.assertTrue(RolePermissionPolicy.can_edit_budget(role))
-            self.assertTrue(RolePermissionPolicy.can_lock_scenes(role))
-            self.assertTrue(RolePermissionPolicy.can_manage_members(role))
-            caps = RolePermissionPolicy.get_capabilities(role)
-            self.assertTrue(all(caps.values()))
+    def test_memberships_endpoint_is_deprecated_and_disabled(self):
+        """Membership and multi-user RBAC route is deprecated and disabled in solo mode."""
+        resp = self.client.get("/api/memberships/")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_membership_crud_and_duplicate_rejection(self):
-        url = reverse("workspacemembership-list")
-
-        # 1. Create membership
-        resp = self.client.post(
-            url,
-            {
-                "workspace": str(self.workspace.id),
-                "name": "Christopher Nolan",
-                "email": "chris@syncopy.com",
-                "role": "DIRECTOR",
-                "department": "DIRECTING",
-            },
-            format="json",
-        )
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        member_id = resp.data["id"]
-        self.assertEqual(resp.data["role"], "DIRECTOR")
-        self.assertTrue(resp.data["capabilities"]["can_edit_script"])
-        self.assertTrue(resp.data["capabilities"]["can_lock_scenes"])
-        self.assertTrue(resp.data["capabilities"]["can_edit_budget"])
-
-        # 2. Reject duplicate email in same workspace
-        dup_resp = self.client.post(
-            url,
-            {
-                "workspace": str(self.workspace.id),
-                "name": "Chris Dup",
-                "email": "chris@syncopy.com",
-                "role": "PRODUCER",
-            },
-            format="json",
-        )
-        self.assertEqual(dup_resp.status_code, status.HTTP_400_BAD_REQUEST)
-
-        # 3. Same email in different workspace is allowed
-        diff_ws_resp = self.client.post(
-            url,
-            {
-                "workspace": str(self.other_workspace.id),
-                "name": "Chris Nolan",
-                "email": "chris@syncopy.com",
-                "role": "OWNER",
-            },
-            format="json",
-        )
-        self.assertEqual(diff_ws_resp.status_code, status.HTTP_201_CREATED)
-
-        # 4. Filter by workspace and role
-        filter_resp = self.client.get(f"{url}?workspace={self.workspace.id}&role=DIRECTOR")
-        self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(filter_resp.data), 1)
-
-        # 5. Patch role to PRODUCER
-        detail_url = reverse("workspacemembership-detail", kwargs={"pk": member_id})
-        patch_resp = self.client.patch(detail_url, {"role": "PRODUCER"}, format="json")
-        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(patch_resp.data["role"], "PRODUCER")
-        self.assertTrue(patch_resp.data["capabilities"]["can_edit_budget"])
-
-    def test_current_user_role_action(self):
-        url = reverse("workspacemembership-current-user-role")
-
-        # Create explicit member
-        WorkspaceMembership.objects.create(
-            workspace=self.workspace,
-            name="Cillian Murphy",
-            email="cillian@peaky.com",
-            role="ACTOR",
-            department="CAST",
-        )
-
-        # Fetch role by email - in solo mode, actor role retains full studio capabilities
-        resp = self.client.get(f"{url}?workspace={self.workspace.id}&email=cillian@peaky.com")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["role"], "ACTOR")
-        self.assertTrue(resp.data["capabilities"]["can_edit_script"])
-        self.assertTrue(resp.data["capabilities"]["can_edit_budget"])
-
-        # Fetch for unknown email defaults to OWNER fallback
-        resp2 = self.client.get(f"{url}?workspace={self.workspace.id}&email=unknown@studio.com")
-        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp2.data["role"], "OWNER")
-        self.assertTrue(resp2.data["capabilities"]["can_edit_budget"])
+    def test_solo_creator_permission_grants_access(self):
+        """IsSoloCreator base permission grants unrestricted access across view methods."""
+        perm = IsSoloCreator()
+        self.assertTrue(perm.has_permission(None, None))
+        self.assertTrue(perm.has_object_permission(None, None, None))
 
 
 class StudioActivityLogAndWebSocketAPITests(APITestCase):

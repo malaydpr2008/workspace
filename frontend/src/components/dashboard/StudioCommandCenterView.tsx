@@ -112,6 +112,23 @@ export const StudioCommandCenterView: React.FC<StudioCommandCenterViewProps> = (
     return Math.max(1, Math.ceil(totalSceneBlocks / 18));
   }, [totalSceneBlocks, scenes.length]);
 
+  const totalWordCount = useMemo(() => {
+    let count = 0;
+    scenes.forEach((sc) => {
+      const childIds = childrenMap[sc.id] || [];
+      childIds.forEach((cid) => {
+        const blk = nodes[cid];
+        if (blk?.content) {
+          count += blk.content.trim().split(/\s+/).filter(Boolean).length;
+        }
+      });
+      if (sc.content) {
+        count += sc.content.trim().split(/\s+/).filter(Boolean).length;
+      }
+    });
+    return count;
+  }, [scenes, childrenMap, nodes]);
+
   // Script Revision State
   const activeRevisionColor = (screenplayNode.revision_color ||
     screenplayNode.properties?.revision_color ||
@@ -370,11 +387,11 @@ export const StudioCommandCenterView: React.FC<StudioCommandCenterViewProps> = (
                 )}
               </div>
               <p className="text-xs font-mono text-slate-400 flex items-center space-x-3">
-                <span>Studio: {currentWorkspace?.name || 'Studio Production'}</span>
+                <span>Studio: {currentWorkspace?.name || 'Solo Studio Production'}</span>
                 <span>•</span>
-                <span>Author: {screenplayNode.properties?.author || 'Screenplay Author'}</span>
+                <span>Author: {screenplayNode.properties?.author || 'Solo Creator'}</span>
                 <span>•</span>
-                <span>Est. Runtime: ~{estimatedPages} Mins ({estimatedPages} Pages)</span>
+                <span>Est. Screen Time: ~{estimatedPages} Mins ({scenes.length} Scenes Drafted • {totalWordCount.toLocaleString()} Words)</span>
               </p>
             </div>
 
@@ -418,10 +435,10 @@ export const StudioCommandCenterView: React.FC<StudioCommandCenterViewProps> = (
                     />
                   </div>
                   <div className="text-xl font-bold font-mono text-white mb-1">
-                    {scenes.length} Scenes
+                    {scenes.length} Scenes Drafted
                   </div>
                   <div className="text-xs font-mono text-slate-400 mb-3">
-                    ~{estimatedPages} Estimated Pages
+                    {totalWordCount.toLocaleString()} Words • ~{estimatedPages} Mins Screen Time
                   </div>
                 </div>
                 <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono">

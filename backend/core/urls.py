@@ -19,7 +19,6 @@ from core.views import (
     BudgetCategoryViewSet,
     BudgetLineItemViewSet,
     ProductionMilestoneViewSet,
-    WorkspaceMembershipViewSet,
     StudioActivityLogViewSet,
     ScriptCoverageReportViewSet,
 )
@@ -47,7 +46,6 @@ router.register(r"budgets", ProductionBudgetViewSet, basename="productionbudget"
 router.register(r"budget-categories", BudgetCategoryViewSet, basename="budgetcategory")
 router.register(r"budget-line-items", BudgetLineItemViewSet, basename="budgetlineitem")
 router.register(r"milestones", ProductionMilestoneViewSet, basename="productionmilestone")
-router.register(r"memberships", WorkspaceMembershipViewSet, basename="workspacemembership")
 router.register(r"activity-logs", StudioActivityLogViewSet, basename="studioactivitylog")
 router.register(r"coverage-reports", ScriptCoverageReportViewSet, basename="scriptcoveragereport")
 

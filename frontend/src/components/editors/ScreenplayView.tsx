@@ -25,7 +25,6 @@ import {
   Music,
   DollarSign,
   LayoutDashboard,
-  Users,
   Activity,
   Sparkles,
 } from 'lucide-react';
@@ -58,7 +57,6 @@ import { ADRRecordingSheetView } from '@/components/audio/ADRRecordingSheetView'
 import { AudioSpottingDrawer } from '@/components/audio/AudioSpottingDrawer';
 import { ProductionBudgetView } from '@/components/budget/ProductionBudgetView';
 import { StudioCommandCenterView } from '@/components/dashboard/StudioCommandCenterView';
-import { TeamManagementModal } from '@/components/team/TeamManagementModal';
 import { StudioActivityDrawer } from '@/components/activity/StudioActivityDrawer';
 import { ScriptCoverageModal } from '@/components/ai/ScriptCoverageModal';
 import { exportProductionBibleZip } from '@/lib/productionBible';
@@ -118,7 +116,6 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
   const [isSidesModalOpen, setIsSidesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
   const [isCoverageModalOpen, setIsCoverageModalOpen] = useState(false);
 
@@ -652,15 +649,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
             </button>
           </div>
 
-          {/* Team Members & Roles Button */}
-          <button
-            onClick={() => setIsTeamModalOpen(true)}
-            className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-mono font-medium transition-all"
-            title="Manage team collaborators and role permissions"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Team</span>
-          </button>
+
 
           {/* Executive Studio Script Coverage Button */}
           <button
@@ -1943,13 +1932,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         }}
       />
 
-      {/* Team Management & RBAC Modal */}
-      <TeamManagementModal
-        isOpen={isTeamModalOpen}
-        onClose={() => setIsTeamModalOpen(false)}
-        workspaceId={currentWorkspace?.id || ''}
-        workspaceName={currentWorkspace?.name}
-      />
+
 
       {/* Studio Activity Audit Stream Drawer */}
       <StudioActivityDrawer

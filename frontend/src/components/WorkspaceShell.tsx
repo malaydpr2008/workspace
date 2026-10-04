@@ -5,9 +5,8 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { WorkspaceSidebar } from './tree/WorkspaceSidebar';
 import { NodeDispatcher } from './NodeDispatcher';
 import { CommandPalette } from './navigation/CommandPalette';
-import { TeamManagementModal } from './team/TeamManagementModal';
 import { StudioActivityDrawer } from './activity/StudioActivityDrawer';
-import { AlertCircle, RefreshCw, X, Shield, Users, Activity } from 'lucide-react';
+import { AlertCircle, RefreshCw, X, Shield, Activity } from 'lucide-react';
 import { WorkspaceRole, WorkspaceNode } from '@/types/workspace';
 import { createWorkspaceSocket, WorkspaceSocketClient } from '@/lib/websocket';
 
@@ -56,7 +55,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     applyRemoteNodeMutation,
   } = useWorkspaceStore();
 
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
   const socketClientRef = useRef<WorkspaceSocketClient | null>(null);
   const localUserIdRef = useRef<string>('usr-collab-lead');
@@ -238,16 +236,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
               <Activity className="w-3 h-3 text-indigo-400" />
               <span>Activity</span>
             </button>
-
-            {/* Team Management Modal Trigger */}
-            <button
-              onClick={() => setIsTeamModalOpen(true)}
-              className="flex items-center space-x-1 px-2.5 py-1 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] transition-colors"
-              title="Manage team members and permissions"
-            >
-              <Users className="w-3 h-3" />
-              <span>Team</span>
-            </button>
           </div>
         </div>
 
@@ -257,13 +245,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
       {/* Global Universal Command Palette (CMD+K / Ctrl+K) */}
       <CommandPalette />
 
-      {/* Team Management Modal */}
-      <TeamManagementModal
-        isOpen={isTeamModalOpen}
-        onClose={() => setIsTeamModalOpen(false)}
-        workspaceId={currentWorkspace?.id || ''}
-        workspaceName={currentWorkspace?.name}
-      />
+
 
       {/* Studio Activity Stream & Audit Log Drawer */}
       <StudioActivityDrawer

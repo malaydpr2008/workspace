@@ -12,12 +12,12 @@ import {
   Sparkles,
   Users,
   ChevronDown,
+  Sliders,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { TreeNodeItem } from './TreeNodeItem';
 import { NodeType, Workspace } from '@/types/workspace';
 import { fetchWorkspaces } from '@/lib/api';
-import { TeamManagementModal } from '@/components/team/TeamManagementModal';
 
 export const WorkspaceSidebar: React.FC = () => {
   const {
@@ -31,7 +31,6 @@ export const WorkspaceSidebar: React.FC = () => {
 
   const [availableWorkspaces, setAvailableWorkspaces] = useState<Workspace[]>([]);
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -269,20 +268,17 @@ export const WorkspaceSidebar: React.FC = () => {
         )}
       </div>
 
-      {/* Team & Role Management Action */}
+      {/* Studio Preferences / Environment Info */}
       <div className="p-2 border-t border-slate-800/60 bg-slate-950/40">
-        <button
-          onClick={() => setIsTeamModalOpen(true)}
-          className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-900/60 hover:bg-slate-800/80 text-slate-300 hover:text-white border border-slate-800/80 text-xs font-mono transition-all group shadow-sm"
-        >
+        <div className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-900/40 border border-slate-800/60 text-xs font-mono text-slate-400">
           <div className="flex items-center space-x-2">
-            <Users className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-300" />
-            <span>Team & Collaborators</span>
+            <Sliders className="w-3.5 h-3.5 text-amber-400" />
+            <span>Studio Environment</span>
           </div>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 font-bold border border-amber-500/20">
             Solo
           </span>
-        </button>
+        </div>
       </div>
 
       {/* Footer System Meta */}
@@ -290,14 +286,6 @@ export const WorkspaceSidebar: React.FC = () => {
         <span>Deterministic LexoRank $O(1)$</span>
         <span className="font-mono text-cyan-400/80">DRF v5.2</span>
       </div>
-
-      {/* Team Management & RBAC Modal */}
-      <TeamManagementModal
-        isOpen={isTeamModalOpen}
-        onClose={() => setIsTeamModalOpen(false)}
-        workspaceId={currentWorkspace?.id || ''}
-        workspaceName={currentWorkspace?.name}
-      />
     </aside>
   );
 };
