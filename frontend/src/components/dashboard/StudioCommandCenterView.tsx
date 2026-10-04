@@ -386,7 +386,7 @@ export const StudioCommandCenterView: React.FC<StudioCommandCenterViewProps> = (
               <p className="text-xs font-mono text-slate-400 flex items-center space-x-3">
                 <span>Studio: {currentWorkspace?.name || 'Solo Studio Production'}</span>
                 <span>•</span>
-                <span>Author: {screenplayNode.properties?.author || 'Solo Creator'}</span>
+                <span>Author: {screenplayNode.properties?.writer || screenplayNode.properties?.author || 'Solo Creator'}</span>
                 <span>•</span>
                 <span>Est. Screen Time: ~{estimatedPages} Mins ({scenes.length} Scenes Drafted • {totalWordCount.toLocaleString()} Words)</span>
               </p>

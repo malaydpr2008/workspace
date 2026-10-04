@@ -360,13 +360,6 @@ export interface StudioActivityLog {
   created_at: string;
 }
 
-export interface CollaboratorPresence {
-  userId: string;
-  userName: string;
-  userRole: WorkspaceRole;
-  focusedBlockId?: string | null;
-  lastSeen: number;
-}
 
 export type CoverageVerdict = 'RECOMMEND' | 'CONSIDER' | 'PASS';
 

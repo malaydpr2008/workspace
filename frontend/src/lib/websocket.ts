@@ -1,9 +1,5 @@
 export interface WebSocketEvent {
-  action: 'connected' | 'presence_update' | 'presence_leave' | 'broadcast_mutation' | 'pong';
-  user_id?: string;
-  user_name?: string;
-  user_role?: string;
-  focused_block_id?: string | null;
+  action: 'connected' | 'broadcast_mutation' | 'pong';
   is_self?: boolean;
   mutation_type?: string;
   payload?: unknown;
@@ -14,17 +10,11 @@ export interface WebSocketEvent {
 }
 
 export interface WorkspaceSocketClient {
-  sendPresence: (params: {
-    userId: string;
-    userName: string;
-    userRole: string;
-    focusedBlockId?: string | null;
-  }) => void;
   sendMutation: (
     mutationType: string,
     payload: unknown,
-    actorName: string,
-    actorRole: string
+    actorName?: string,
+    actorRole?: string
   ) => void;
   disconnect: () => void;
   isConnected: () => boolean;
@@ -109,21 +99,7 @@ export function createWorkspaceSocket(
   connect();
 
   return {
-    sendPresence: ({ userId, userName, userRole, focusedBlockId }) => {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(
-          JSON.stringify({
-            action: 'presence_update',
-            user_id: userId,
-            user_name: userName,
-            user_role: userRole,
-            focused_block_id: focusedBlockId ?? null,
-            timestamp: new Date().toISOString(),
-          })
-        );
-      }
-    },
-    sendMutation: (mutationType, payload, actorName, actorRole) => {
+    sendMutation: (mutationType, payload, actorName = 'Solo Creator', actorRole = 'OWNER') => {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(
           JSON.stringify({
@@ -143,8 +119,8 @@ export function createWorkspaceSocket(
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (socket) {
         socket.close();
-        socket = null;
       }
+      socket = null;
     },
     isConnected: () => socket !== null && socket.readyState === WebSocket.OPEN,
   };

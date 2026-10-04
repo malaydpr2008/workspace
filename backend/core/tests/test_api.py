@@ -21,7 +21,6 @@ from core.models import (
     BudgetCategory,
     BudgetLineItem,
     ProductionMilestone,
-    WorkspaceMembership,
     StudioActivityLog,
     ScriptCoverageReport,
 )
@@ -32,13 +31,6 @@ class WorkspaceNodeAPITests(APITestCase):
     def setUp(self):
         self.workspace = Workspace.objects.create(name="Film Project", slug="film-project")
         self.user = User.objects.create_user(username="api_owner", email="owner@filmproject.com", password="password")
-        WorkspaceMembership.objects.create(
-            workspace=self.workspace,
-            user=self.user,
-            email=self.user.email,
-            name="API Owner",
-            role="OWNER",
-        )
         self.client.force_authenticate(user=self.user)
         self.root_node = WorkspaceNode.objects.create(
             workspace=self.workspace,
@@ -981,26 +973,13 @@ class StudioActivityLogAndWebSocketAPITests(APITestCase):
             response = await communicator.receive_json_from()
             self.assertEqual(response["action"], "pong")
 
-            # Test presence update broadcast
-            await communicator.send_json_to({
-                "action": "presence_update",
-                "user_id": "usr-director-1",
-                "user_name": "Director Nolan",
-                "user_role": "DIRECTOR",
-                "focused_block_id": str(self.scene.id),
-            })
-            response = await communicator.receive_json_from()
-            self.assertEqual(response["action"], "presence_update")
-            self.assertEqual(response["user_name"], "Director Nolan")
-            self.assertEqual(response["focused_block_id"], str(self.scene.id))
-
-            # Test broadcast mutation
+            # Test broadcast mutation for multi-tab synchronization
             await communicator.send_json_to({
                 "action": "broadcast_mutation",
                 "mutation_type": "SCENE_LOCK",
                 "payload": {"scene_id": str(self.scene.id), "scene_number": "1A"},
-                "actor_name": "Director Nolan",
-                "actor_role": "DIRECTOR",
+                "actor_name": "Solo Creator",
+                "actor_role": "OWNER",
             })
             response = await communicator.receive_json_from()
             self.assertEqual(response["action"], "broadcast_mutation")
@@ -1016,13 +995,6 @@ class StudioAIEngineAndCoverageAPITests(APITestCase):
     def setUp(self):
         self.workspace = Workspace.objects.create(name="AI Studio", slug="ai-studio")
         self.user = User.objects.create_user(username="ai_owner", email="owner@aistudio.com", password="password")
-        WorkspaceMembership.objects.create(
-            workspace=self.workspace,
-            user=self.user,
-            email=self.user.email,
-            name="AI Owner",
-            role="OWNER",
-        )
         self.client.force_authenticate(user=self.user)
         self.screenplay = WorkspaceNode.objects.create(
             workspace=self.workspace,

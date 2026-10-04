@@ -101,7 +101,6 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     saveStatus,
     untagBlockFromElement,
     uploadShotStoryboard,
-    collaborators,
     logStudioAction,
   } = useWorkspaceStore();
 
@@ -504,12 +503,10 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               <span>{scenes.length} Scene{scenes.length === 1 ? '' : 's'}</span>
               <span>•</span>
               <span>{shots.length} Shot{shots.length === 1 ? '' : 's'}</span>
-              {node.properties?.author && (
-                <>
-                  <span>•</span>
-                  <span>Writer: {node.properties.author}</span>
-                </>
-              )}
+              <span>•</span>
+              <span>Writer: {node.properties?.writer || node.properties?.author || 'Solo Creator'}</span>
+              <span>•</span>
+              <span>Draft: {node.revision_color ? `${node.revision_color} Draft` : 'White Draft'}</span>
             </div>
           </div>
         </div>
@@ -980,8 +977,6 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                     const characterName =
                       block.properties?.character_name || character?.name || 'CHARACTER';
                     const blockBreakdownElements = getBlockBreakdownElements(block.id);
-                    const remoteCollaborators = collaborators.filter((c) => c.focusedBlockId === block.id);
-                    const hasRemoteFocus = remoteCollaborators.length > 0;
 
                     if (block.type === 'action') {
                       const isRevised = Boolean(
@@ -995,27 +990,11 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                         <div
                           key={block.id}
                           className={`screenplay-action-block group relative p-4 rounded-lg font-mono text-sm leading-relaxed transition-all duration-200 ${
-                            hasRemoteFocus ? 'border-l-4 border-l-sky-500 bg-sky-950/20' : ''
-                          } ${
                             isCovered
                               ? 'bg-cyan-950/30 border border-cyan-500/60 shadow-sm shadow-cyan-950 text-cyan-100'
                               : 'text-slate-300 bg-slate-900/20 border border-transparent hover:border-slate-800 hover:bg-slate-900/40'
                           }`}
                         >
-                          {/* Remote Collaborators Focused Indicator */}
-                          {hasRemoteFocus && (
-                            <div className="no-print flex items-center gap-1.5 mb-2">
-                              {remoteCollaborators.map((c) => (
-                                <div
-                                  key={c.userId}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-sky-950/90 border border-sky-500/70 text-sky-200 shadow-sm animate-pulse"
-                                >
-                                  <span>{c.userRole === 'DIRECTOR' ? '🎬' : c.userRole === 'PRODUCER' ? '💼' : '✍️'}</span>
-                                  <span className="font-semibold">{c.userName} ({c.userRole}) editing...</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
                           {/* Right Margin Revision Asterisk */}
                           <div
                             onClick={() => {
@@ -1196,27 +1175,11 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                         <div
                           key={block.id}
                           className={`screenplay-dialogue-block group relative p-5 rounded-lg transition-all duration-200 ${
-                            hasRemoteFocus ? 'border-l-4 border-l-sky-500 bg-sky-950/20' : ''
-                          } ${
                             isCovered
                               ? 'bg-blue-950/40 border border-cyan-400/60 ring-1 ring-cyan-400/20 shadow-lg shadow-cyan-950/40'
                               : 'text-slate-300 bg-slate-900/20 border border-transparent hover:border-slate-800 hover:bg-slate-900/40'
                           }`}
                         >
-                          {/* Remote Collaborators Focused Indicator */}
-                          {hasRemoteFocus && (
-                            <div className="no-print flex items-center gap-1.5 mb-2">
-                              {remoteCollaborators.map((c) => (
-                                <div
-                                  key={c.userId}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-sky-950/90 border border-sky-500/70 text-sky-200 shadow-sm animate-pulse"
-                                >
-                                  <span>{c.userRole === 'DIRECTOR' ? '🎬' : c.userRole === 'PRODUCER' ? '💼' : '✍️'}</span>
-                                  <span className="font-semibold">{c.userName} ({c.userRole}) editing...</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
                           {/* Right Margin Revision Asterisk */}
                           <div
                             onClick={() => {
