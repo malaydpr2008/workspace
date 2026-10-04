@@ -36,6 +36,8 @@ services:
     restart: always
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend:/app
     environment:
       - PYTHONUNBUFFERED=1
       - DJANGO_SETTINGS_MODULE=config.settings
@@ -44,10 +46,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend,[::1],*
       - DEBUG=1
+    command: python manage.py runserver 0.0.0.0:8000
     networks:
       - workspace-net
-    volumes:
-      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
@@ -62,22 +63,28 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: workspace-frontend
     restart: always
     ports:
       - "3000:3000"
+    volumes:
+      # Bind mount host directory for live hot-reloading
+      - ./frontend:/app
+      # Preserve container-installed node_modules and build cache
+      - /app/node_modules
+      - /app/.next
     environment:
-      - NODE_ENV=production
-      # Used by Next.js server-side fetches and rewrites inside the Docker network:
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true
       - INTERNAL_BACKEND_URL=http://backend:8000
-      # Used by client-side browser fetches hitting backend port 8000:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    command: npm run dev
+    networks:
+      - workspace-net
     depends_on:
       backend:
         condition: service_healthy
-    networks:
-      - workspace-net
 
 volumes:
   pgdata:
