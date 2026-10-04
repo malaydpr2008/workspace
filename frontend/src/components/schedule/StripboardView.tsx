@@ -42,6 +42,7 @@ import { CastDOODView } from './CastDOODView';
 interface StripboardViewProps {
   screenplayNode: WorkspaceNode;
   scenes: WorkspaceNode[];
+  activeSceneId?: string;
 }
 
 export function getStripColorClass(sceneTitle: string = '') {
@@ -107,6 +108,7 @@ export function calculatePageEighths(wordCount: number) {
 export const StripboardView: React.FC<StripboardViewProps> = ({
   screenplayNode,
   scenes,
+  activeSceneId,
 }) => {
   const {
     nodes,
@@ -645,6 +647,7 @@ export const StripboardView: React.FC<StripboardViewProps> = ({
                               childrenMap={childrenMap}
                               characters={characters}
                               sortedDays={sortedDays}
+                              activeSceneId={activeSceneId}
                               onMove={handleMoveStrip}
                               onDelete={deleteStripItem}
                             />
@@ -697,6 +700,7 @@ export const StripboardView: React.FC<StripboardViewProps> = ({
                           childrenMap={childrenMap}
                           characters={characters}
                           sortedDays={sortedDays}
+                          activeSceneId={activeSceneId}
                           onMove={handleMoveStrip}
                           onDelete={deleteStripItem}
                         />
@@ -732,6 +736,7 @@ interface SortableStripCardProps {
   childrenMap: Record<string, string[]>;
   characters: Record<string, Character>;
   sortedDays: ShootingDay[];
+  activeSceneId?: string;
   onMove: (stripId: string, dayId: string | null) => void;
   onDelete: (stripId: string) => void;
 }
@@ -742,6 +747,7 @@ const SortableStripCard: React.FC<SortableStripCardProps> = ({
   childrenMap,
   characters,
   sortedDays,
+  activeSceneId,
   onMove,
   onDelete,
 }) => {
@@ -830,12 +836,19 @@ const SortableStripCard: React.FC<SortableStripCardProps> = ({
   });
 
   const pageCalc = calculatePageEighths(wordCount);
+  const isCardActive = Boolean(
+    strip.scene && activeSceneId && strip.scene === activeSceneId
+  );
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative p-2.5 rounded-xl border text-xs font-mono shadow-sm transition-all select-none ${colorConfig.bg}`}
+      className={`group relative p-2.5 rounded-xl border text-xs font-mono shadow-sm transition-all select-none ${colorConfig.bg} ${
+        isCardActive
+          ? 'ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-950 scale-[1.02] shadow-lg shadow-cyan-500/40'
+          : ''
+      }`}
     >
       <div className="flex items-start justify-between gap-2">
         {/* Drag handle & Scene heading */}

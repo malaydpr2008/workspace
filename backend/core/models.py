@@ -10,9 +10,17 @@ if not hasattr(models, "JSONBField"):
 
 
 class Workspace(models.Model):
+    PROJECT_TYPE_CHOICES = (
+        ("film", "Film Studio"),
+        ("novel", "Novel Studio"),
+        ("article", "Codex / Article"),
+    )
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
+    project_type = models.CharField(max_length=32, choices=PROJECT_TYPE_CHOICES, default="film")
+    description = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

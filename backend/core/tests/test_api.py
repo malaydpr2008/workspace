@@ -1117,6 +1117,55 @@ class RootHealthCheckTests(APITestCase):
         self.assertEqual(resp.json(), {"status": "ok", "service": "backend", "ready": True})
 
 
+class WorkspaceAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="ws_creator", email="creator@studio.com", password="password")
+        self.client.force_authenticate(user=self.user)
+
+    def test_create_film_workspace_with_auto_scaffolding(self):
+        url = reverse("workspace-list")
+        payload = {
+            "name": "Neon Odyssey",
+            "slug": "neon-odyssey",
+            "project_type": "film",
+            "description": "Sci-Fi Film Studio project",
+        }
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["project_type"], "film")
+        self.assertEqual(res.data["description"], "Sci-Fi Film Studio project")
+
+        ws = Workspace.objects.get(slug="neon-odyssey")
+        self.assertEqual(ws.project_type, "film")
+        self.assertTrue(ws.nodes.filter(type="screenplay").exists())
+
+    def test_create_novel_workspace_with_auto_scaffolding(self):
+        url = reverse("workspace-list")
+        payload = {
+            "name": "Quantum Solace",
+            "slug": "quantum-solace",
+            "project_type": "novel",
+            "description": "Novel manuscript",
+        }
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["project_type"], "novel")
+
+        ws = Workspace.objects.get(slug="quantum-solace")
+        self.assertEqual(ws.project_type, "novel")
+        self.assertTrue(ws.nodes.filter(type="story").exists())
+
+    def test_update_workspace_metadata(self):
+        ws = Workspace.objects.create(name="Alpha", slug="alpha", project_type="article", description="Draft doc")
+        url = reverse("workspace-detail", kwargs={"pk": str(ws.id)})
+        res = self.client.patch(url, {"project_type": "film", "description": "Upgraded to feature screenplay"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ws.refresh_from_db()
+        self.assertEqual(ws.project_type, "film")
+        self.assertEqual(ws.description, "Upgraded to feature screenplay")
+
+
+
 
 
 

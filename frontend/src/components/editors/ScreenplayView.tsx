@@ -102,6 +102,8 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     untagBlockFromElement,
     uploadShotStoryboard,
     logStudioAction,
+    selectedNodeId,
+    activeFilmSuite,
   } = useWorkspaceStore();
 
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
@@ -156,11 +158,41 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
       .filter((n): n is WorkspaceNode => n?.type === 'scene');
   }, [isScene, node, childrenMap, nodes]);
 
+  const scriptContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Resolve selected scene from store (e.g. from Scene Spine outliner)
+  const selectedSceneIdFromStore = useMemo(() => {
+    if (!selectedNodeId) return null;
+    if (scenes.some((s) => s.id === selectedNodeId)) {
+      return selectedNodeId;
+    }
+    // Check if selectedNodeId is an action or dialogue block inside one of the scenes
+    const parentScene = scenes.find((s) => (childrenMap[s.id] || []).includes(selectedNodeId));
+    if (parentScene) return parentScene.id;
+    return null;
+  }, [selectedNodeId, scenes, childrenMap]);
+
   const activeSceneId = isScene
     ? node.id
-    : (userSelectedSceneId && scenes.some((s) => s.id === userSelectedSceneId)
-        ? userSelectedSceneId
-        : scenes[0]?.id) || '';
+    : (selectedSceneIdFromStore ||
+       (userSelectedSceneId && scenes.some((s) => s.id === userSelectedSceneId)
+         ? userSelectedSceneId
+         : scenes[0]?.id) ||
+       '');
+
+  // Smooth scroll to scene or block in screenplay editor
+  useEffect(() => {
+    if (selectedNodeId && selectedNodeId !== node.id) {
+      if (scenes.some((s) => s.id === selectedNodeId)) {
+        scriptContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        const el = document.getElementById(`block-${selectedNodeId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }
+  }, [selectedNodeId, scenes, node.id]);
 
   useEffect(() => {
     loadBreakdownElements();
@@ -184,7 +216,19 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     }
   }, [activeSceneId, loadSceneShots, loadAudioCuesForScene, loadNodeChildren, childrenMap]);
 
-  const effectiveViewMode = viewMode;
+  const effectiveViewMode = useMemo(() => {
+    if (activeFilmSuite === 'storyboard') return 'shotlist';
+    if (activeFilmSuite === 'schedule') return 'stripboard';
+    if (activeFilmSuite === 'budget') return 'budget';
+    if (activeFilmSuite === 'analytics') return 'overview';
+    if (activeFilmSuite === 'screenplay') {
+      if (['shotlist', 'stripboard', 'budget', 'overview'].includes(viewMode)) {
+        return 'editor';
+      }
+      return viewMode;
+    }
+    return viewMode;
+  }, [activeFilmSuite, viewMode]);
 
   const currentScene = nodes[activeSceneId] || (isScene ? node : null);
   const sceneBlocks = currentScene
@@ -740,7 +784,10 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               return (
                 <button
                   key={sc.id}
-                  onClick={() => setUserSelectedSceneId(sc.id)}
+                  onClick={() => {
+                    setUserSelectedSceneId(sc.id);
+                    selectNode(sc.id);
+                  }}
                   className={`px-3 py-1 rounded text-xs font-mono transition-all ${
                     activeSceneId === sc.id
                       ? 'bg-cyan-600 text-white shadow-sm font-semibold'
@@ -790,7 +837,10 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         <ShotListTableView
           scene={currentScene}
           scenes={scenes}
-          onSelectScene={setUserSelectedSceneId}
+          onSelectScene={(sceneId) => {
+            setUserSelectedSceneId(sceneId);
+            selectNode(sceneId);
+          }}
           onOpenReel={(id) => {
             if (id) setActiveShotId(id);
             setIsReelOpen(true);
@@ -800,7 +850,10 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         <BreakdownSheetView
           scene={currentScene}
           scenes={scenes}
-          onSelectScene={setUserSelectedSceneId}
+          onSelectScene={(sceneId) => {
+            setUserSelectedSceneId(sceneId);
+            selectNode(sceneId);
+          }}
           screenplayNode={node}
         />
       ) : effectiveViewMode === 'analytics' ? (
@@ -819,6 +872,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         <StripboardView
           screenplayNode={node}
           scenes={scenes}
+          activeSceneId={activeSceneId}
         />
       ) : effectiveViewMode === 'adr' ? (
         <ADRRecordingSheetView
@@ -833,7 +887,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
       ) : (
         <div className="flex-1 flex overflow-hidden">
         {/* Left: Script Flow (Courier Prime / Monospace standard format) */}
-        <div className="screenplay-print-container flex-1 overflow-y-auto p-8 lg:p-12 border-r border-slate-800/80 bg-slate-950/40">
+        <div ref={scriptContainerRef} className="screenplay-print-container flex-1 overflow-y-auto p-8 lg:p-12 border-r border-slate-800/80 bg-slate-950/40">
           <div className="max-w-3xl mx-auto space-y-6">
             {/* Screenplay Heading */}
             {!isScene && (
@@ -989,6 +1043,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                       return (
                         <div
                           key={block.id}
+                          id={`block-${block.id}`}
                           className={`screenplay-action-block group relative p-4 rounded-lg font-mono text-sm leading-relaxed transition-all duration-200 ${
                             isCovered
                               ? 'bg-cyan-950/30 border border-cyan-500/60 shadow-sm shadow-cyan-950 text-cyan-100'
@@ -1174,6 +1229,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
                       return (
                         <div
                           key={block.id}
+                          id={`block-${block.id}`}
                           className={`screenplay-dialogue-block group relative p-5 rounded-lg transition-all duration-200 ${
                             isCovered
                               ? 'bg-blue-950/40 border border-cyan-400/60 ring-1 ring-cyan-400/20 shadow-lg shadow-cyan-950/40'

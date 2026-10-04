@@ -10,10 +10,14 @@ export type NodeType =
   | 'paragraph'
   | 'heading';
 
+export type ProjectType = 'film' | 'novel' | 'article';
+
 export interface Workspace {
   id: string;
   name: string;
   slug: string;
+  project_type?: ProjectType;
+  description?: string;
   created_at: string;
 }
 

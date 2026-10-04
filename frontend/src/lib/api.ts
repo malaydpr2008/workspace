@@ -93,6 +93,22 @@ export async function fetchWorkspaces(): Promise<Workspace[]> {
   return handleResponse<Workspace[]>(res);
 }
 
+export async function createWorkspace(data: {
+  name: string;
+  slug?: string;
+  project_type?: 'film' | 'novel' | 'article';
+  description?: string;
+}): Promise<Workspace> {
+  const res = await fetch(`${API_BASE_URL}/workspaces/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<Workspace>(res);
+}
+
 export async function fetchNodes(
   workspaceId: string,
   parentId?: string | null

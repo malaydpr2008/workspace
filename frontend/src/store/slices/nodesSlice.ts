@@ -3,6 +3,7 @@ import { WorkspaceState, NodesSlice } from '../types';
 import { WorkspaceNode, Character, BreakdownElement } from '@/types/workspace';
 import {
   fetchWorkspaces,
+  createWorkspace,
   fetchNodes,
   fetchSubtree,
   createNode,
@@ -32,8 +33,52 @@ export const createNodesSlice: StateCreator<WorkspaceState, [], [], NodesSlice> 
   saveStatus: 'idle',
   error: null,
   lastError: null,
+  activeFilmSuite: 'screenplay',
+  workspacesList: [],
+  isProjectModalOpen: false,
+
+  setIsProjectModalOpen: (open) => set({ isProjectModalOpen: open }),
 
   clearLastError: () => set({ lastError: null }),
+
+  setActiveFilmSuite: (suite) => set({ activeFilmSuite: suite }),
+
+  loadWorkspacesList: async () => {
+    try {
+      const list = await fetchWorkspaces();
+      set({ workspacesList: list });
+      return list;
+    } catch (err) {
+      console.error('Failed to load workspaces list', err);
+      return [];
+    }
+  },
+
+  createNewProject: async (name: string, projectType: 'film' | 'novel' | 'article', description = '') => {
+    try {
+      const slug = name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || `project-${Date.now()}`;
+
+      const created = await createWorkspace({
+        name: name.trim(),
+        slug,
+        project_type: projectType,
+        description: description.trim(),
+      });
+
+      await get().loadWorkspacesList();
+      await get().switchWorkspace(created.slug);
+      return created;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create new project';
+      set({ lastError: msg });
+      console.error('Failed to create new project', err);
+      return null;
+    }
+  },
 
   switchWorkspace: async (slug: string) => {
     Object.keys(debounceTimers).forEach((key) => {
@@ -173,6 +218,7 @@ export const createNodesSlice: StateCreator<WorkspaceState, [], [], NodesSlice> 
 
       set({
         currentWorkspace: workspace,
+        workspacesList: workspaces,
         nodes: normalizedNodes,
         rootNodeIds: rootIds,
         selectedNodeId: firstRootId,

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Clapperboard,
   BookOpen,
@@ -21,9 +21,47 @@ export const NodeDispatcher: React.FC = () => {
     rootNodeIds,
     selectNode,
     childrenMap,
+    currentWorkspace,
   } = useWorkspaceStore();
 
+  const isFilm = currentWorkspace?.project_type === 'film';
+
+  // For film workspace: find the root screenplay node so that full film context is preserved
+  const filmScreenplayNode = useMemo(() => {
+    if (!isFilm) return null;
+    return (
+      Object.values(nodes).find((n) => n.type === 'screenplay') ||
+      rootNodeIds.map((rid) => nodes[rid]).find((n) => n?.type === 'screenplay') ||
+      null
+    );
+  }, [isFilm, nodes, rootNodeIds]);
+
   const selectedNode = selectedNodeId ? nodes[selectedNodeId] : null;
+
+  // Dedicated Film Studio mode: Always render the complete creative suite around screenplay
+  if (isFilm && filmScreenplayNode) {
+    return <ScreenplayView node={filmScreenplayNode} />;
+  }
+
+  // If in novel workspace with no node selected, default to story root if available
+  if (!selectedNode && currentWorkspace?.project_type === 'novel') {
+    const novelRoot =
+      Object.values(nodes).find((n) => n.type === 'story') ||
+      rootNodeIds.map((rid) => nodes[rid]).find((n) => n?.type === 'story');
+    if (novelRoot) {
+      return <StoryView node={novelRoot} />;
+    }
+  }
+
+  // If in article workspace with no node selected, default to article root if available
+  if (!selectedNode && currentWorkspace?.project_type === 'article') {
+    const articleRoot =
+      Object.values(nodes).find((n) => n.type === 'article') ||
+      rootNodeIds.map((rid) => nodes[rid]).find((n) => n?.type === 'article');
+    if (articleRoot) {
+      return <ArticleView node={articleRoot} />;
+    }
+  }
 
   if (!selectedNode) {
     return (

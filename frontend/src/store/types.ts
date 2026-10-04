@@ -34,7 +34,18 @@ export interface NodesSlice {
   saveStatus: 'idle' | 'saving' | 'saved';
   error: string | null;
   lastError: string | null;
+  activeFilmSuite: 'screenplay' | 'storyboard' | 'schedule' | 'budget' | 'analytics';
+  workspacesList: Workspace[];
+  isProjectModalOpen: boolean;
 
+  setIsProjectModalOpen: (open: boolean) => void;
+  setActiveFilmSuite: (suite: 'screenplay' | 'storyboard' | 'schedule' | 'budget' | 'analytics') => void;
+  loadWorkspacesList: () => Promise<Workspace[]>;
+  createNewProject: (
+    name: string,
+    projectType: 'film' | 'novel' | 'article',
+    description?: string
+  ) => Promise<Workspace | null>;
   clearLastError: () => void;
   loadSubtree: (nodeId: string) => Promise<WorkspaceNode[]>;
   loadWorkspace: (slug: string) => Promise<void>;

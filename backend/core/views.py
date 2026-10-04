@@ -55,6 +55,42 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
     queryset = Workspace.objects.all()
     serializer_class = WorkspaceSerializer
 
+    def perform_create(self, serializer):
+        workspace = serializer.save()
+        if workspace.project_type == "film":
+            if not workspace.nodes.exists():
+                WorkspaceNode.objects.create(
+                    workspace=workspace,
+                    parent=None,
+                    type="screenplay",
+                    title=f"{workspace.name} Screenplay",
+                    content="",
+                    rank="0|h:",
+                    properties={"writer": "Solo Creator", "status": "draft"},
+                )
+        elif workspace.project_type == "novel":
+            if not workspace.nodes.exists():
+                WorkspaceNode.objects.create(
+                    workspace=workspace,
+                    parent=None,
+                    type="story",
+                    title=f"{workspace.name} Manuscript",
+                    content="",
+                    rank="0|h:",
+                    properties={"author": "Solo Creator"},
+                )
+        elif workspace.project_type == "article":
+            if not workspace.nodes.exists():
+                WorkspaceNode.objects.create(
+                    workspace=workspace,
+                    parent=None,
+                    type="article",
+                    title=f"{workspace.name} Document",
+                    content="",
+                    rank="0|h:",
+                    properties={},
+                )
+
 
 class WorkspaceNodeViewSet(viewsets.ModelViewSet):
     queryset = WorkspaceNode.objects.all()
