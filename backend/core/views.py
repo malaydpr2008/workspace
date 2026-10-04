@@ -51,7 +51,13 @@ from core.serializers import (
     StudioActivityLogSerializer,
     ScriptCoverageReportSerializer,
 )
-from core.permissions import RolePermissionPolicy
+from core.permissions import (
+    RolePermissionPolicy,
+    HasWorkspaceRole,
+    CanModifyNode,
+    IsAuthenticatedOrReadOnly,
+    get_user_workspace_role,
+)
 
 
 class WorkspaceViewSet(viewsets.ModelViewSet):
@@ -62,6 +68,45 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
 class WorkspaceNodeViewSet(viewsets.ModelViewSet):
     queryset = WorkspaceNode.objects.all()
     serializer_class = WorkspaceNodeSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly, HasWorkspaceRole, CanModifyNode]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        # Check if the node itself or any descendant in its recursive subtree is locked
+        try:
+            sql = """
+            WITH RECURSIVE node_tree AS (
+                SELECT id, is_locked FROM core_workspacenode WHERE id = %s
+                UNION ALL
+                SELECT c.id, c.is_locked FROM core_workspacenode c
+                INNER JOIN node_tree p ON c.parent_id = p.id
+            )
+            SELECT id, is_locked FROM node_tree WHERE is_locked = TRUE;
+            """
+            locked_nodes = list(WorkspaceNode.objects.raw(sql, [str(instance.id)]))
+            has_locked = len(locked_nodes) > 0
+        except Exception:
+            queue = [instance.id]
+            has_locked = getattr(instance, "is_locked", False)
+            while queue and not has_locked:
+                curr_id = queue.pop(0)
+                children = list(
+                    WorkspaceNode.objects.filter(parent_id=curr_id).values_list("id", "is_locked")
+                )
+                for cid, is_locked in children:
+                    if is_locked:
+                        has_locked = True
+                        break
+                    queue.append(cid)
+
+        if has_locked:
+            return Response(
+                {"detail": "Cannot delete node containing locked items in its hierarchy."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().destroy(request, *args, **kwargs)
 
     def get_queryset(self):
         queryset = super().get_queryset()

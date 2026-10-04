@@ -30,10 +30,36 @@ class WorkspaceSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+from core.permissions import RolePermissionPolicy, get_user_workspace_role
+
+
 class WorkspaceNodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkspaceNode
         fields = "__all__"
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user_role = get_user_workspace_role(request, obj=self.instance) if request else "OWNER"
+
+        # 1. Enforce lock integrity on locked instances
+        if self.instance and self.instance.is_locked:
+            protected_fields = {"title", "content", "properties", "type", "parent"}
+            if any(f in attrs for f in protected_fields):
+                if not RolePermissionPolicy.can_lock_scenes(user_role):
+                    raise serializers.ValidationError(
+                        {"detail": "This node is locked for revision control."}
+                    )
+
+        # 2. Restrict toggling is_locked to authorized leadership roles (OWNER, PRODUCER, DIRECTOR)
+        if "is_locked" in attrs and self.instance:
+            if attrs["is_locked"] != self.instance.is_locked:
+                if not RolePermissionPolicy.can_lock_scenes(user_role):
+                    raise serializers.ValidationError(
+                        {"detail": "Only directors and studio owners can modify lock state."}
+                    )
+
+        return super().validate(attrs)
 
 
 class CharacterSerializer(serializers.ModelSerializer):
