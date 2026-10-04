@@ -11,10 +11,12 @@ import {
   Search,
   Sparkles,
   Users,
+  ChevronDown,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { TreeNodeItem } from './TreeNodeItem';
-import { NodeType } from '@/types/workspace';
+import { NodeType, Workspace } from '@/types/workspace';
+import { fetchWorkspaces } from '@/lib/api';
 import { TeamManagementModal } from '@/components/team/TeamManagementModal';
 
 export const WorkspaceSidebar: React.FC = () => {
@@ -23,9 +25,12 @@ export const WorkspaceSidebar: React.FC = () => {
     rootNodeIds,
     characters,
     createNewNode,
+    switchWorkspace,
     isLoading,
   } = useWorkspaceStore();
 
+  const [availableWorkspaces, setAvailableWorkspaces] = useState<Workspace[]>([]);
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -34,6 +39,18 @@ export const WorkspaceSidebar: React.FC = () => {
   const [searchFilter, setSearchFilter] = useState('');
 
   const characterCount = Object.keys(characters).length;
+
+  const toggleSwitcher = async () => {
+    if (!isSwitcherOpen) {
+      try {
+        const list = await fetchWorkspaces();
+        setAvailableWorkspaces(list);
+      } catch (err) {
+        console.warn('Failed to fetch workspaces for switcher', err);
+      }
+    }
+    setIsSwitcherOpen(!isSwitcherOpen);
+  };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,22 +63,64 @@ export const WorkspaceSidebar: React.FC = () => {
 
   return (
     <aside className="w-72 h-screen flex flex-col bg-slate-950/90 border-r border-slate-800/80 backdrop-blur-md select-none shrink-0">
-      {/* Workspace Header */}
-      <div className="p-4 border-b border-slate-800/60 flex items-center justify-between">
-        <div className="flex items-center space-x-3 overflow-hidden">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
-            <Layers className="w-4 h-4 text-white" />
-          </div>
-          <div className="truncate">
-            <h2 className="text-sm font-semibold text-white tracking-tight truncate">
-              {currentWorkspace ? currentWorkspace.name : 'Loading Workspace...'}
-            </h2>
-            <div className="flex items-center space-x-2 text-[11px] text-slate-400">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="truncate">{currentWorkspace?.slug || 'studio'}</span>
+      {/* Workspace Header & Switcher */}
+      <div className="p-4 border-b border-slate-800/60 relative">
+        <div
+          onClick={toggleSwitcher}
+          className="flex items-center justify-between cursor-pointer group hover:bg-slate-900/60 p-1.5 -m-1.5 rounded-lg transition-colors"
+          title="Switch workspace"
+        >
+          <div className="flex items-center space-x-3 overflow-hidden">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
+              <Layers className="w-4 h-4 text-white" />
+            </div>
+            <div className="truncate">
+              <h2 className="text-sm font-semibold text-white tracking-tight truncate group-hover:text-cyan-300 transition-colors">
+                {currentWorkspace ? currentWorkspace.name : 'Loading Workspace...'}
+              </h2>
+              <div className="flex items-center space-x-2 text-[11px] text-slate-400">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="truncate">{currentWorkspace?.slug || 'studio'}</span>
+              </div>
             </div>
           </div>
+          <ChevronDown
+            className={`w-4 h-4 text-slate-400 group-hover:text-slate-200 transition-transform ${
+              isSwitcherOpen ? 'rotate-180' : ''
+            }`}
+          />
         </div>
+
+        {/* Switcher Dropdown */}
+        {isSwitcherOpen && (
+          <div className="absolute left-3 right-3 top-16 z-50 bg-slate-900 border border-slate-700/80 rounded-lg shadow-2xl shadow-black/80 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              Switch Workspace
+            </div>
+            <div className="max-h-48 overflow-y-auto divide-y divide-slate-800/50">
+              {availableWorkspaces.map((ws) => (
+                <button
+                  key={ws.id}
+                  onClick={() => {
+                    switchWorkspace(ws.slug);
+                    if (typeof window !== 'undefined') {
+                      window.history.pushState({}, '', `/workspace/${ws.slug}`);
+                    }
+                    setIsSwitcherOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-800 transition-colors ${
+                    currentWorkspace?.id === ws.id
+                      ? 'bg-cyan-950/40 text-cyan-300 font-medium'
+                      : 'text-slate-300'
+                  }`}
+                >
+                  <span className="truncate">{ws.name}</span>
+                  <span className="text-[10px] text-slate-500 ml-2 shrink-0">{ws.slug}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quick Stats / Meta */}

@@ -147,6 +147,10 @@ export function getRoleCapabilities(role: WorkspaceRole): RoleCapabilities {
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
+export function isDebounceActiveForNode(nodeId: string): boolean {
+  return Boolean(debounceTimers[nodeId] || debounceTimers[`${nodeId}-title`]);
+}
+
 interface WorkspaceState {
   currentWorkspace: Workspace | null;
   nodes: Record<string, WorkspaceNode>;
@@ -166,6 +170,8 @@ interface WorkspaceState {
   takesByShot: Record<string, ProductionTake[]>;
   adrCues: Record<string, ADRCue[]>;
   audioCuesByScene: Record<string, AudioSpottingCue[]>;
+  lastEditedLocally: Record<string, number>;
+  nodeVersions: Record<string, number>;
   isLoading: boolean;
   saveStatus: 'idle' | 'saving' | 'saved';
   error: string | null;
@@ -182,6 +188,9 @@ interface WorkspaceState {
   clearLastError: () => void;
   loadSubtree: (nodeId: string) => Promise<WorkspaceNode[]>;
   loadWorkspace: (slug: string) => Promise<void>;
+  switchWorkspace: (slug: string) => Promise<void>;
+  applyRemoteNodeMutation: (remoteData: Partial<WorkspaceNode> & { id: string; client_version?: number }) => void;
+  isNodeDebouncing: (nodeId: string) => boolean;
   toggleExpandNode: (nodeId: string) => Promise<void>;
   selectNode: (nodeId: string) => Promise<void>;
   loadNodeChildren: (nodeId: string) => Promise<WorkspaceNode[]>;
@@ -398,12 +407,104 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     canLockScenes: true,
     canManageMembers: true,
   },
+  lastEditedLocally: {},
+  nodeVersions: {},
   isLoading: false,
   saveStatus: 'idle',
   error: null,
   lastError: null,
 
   clearLastError: () => set({ lastError: null }),
+
+  switchWorkspace: async (slug: string) => {
+    Object.keys(debounceTimers).forEach((key) => {
+      clearTimeout(debounceTimers[key]);
+      delete debounceTimers[key];
+    });
+
+    set({
+      currentWorkspace: null,
+      nodes: {},
+      childrenMap: {},
+      rootNodeIds: [],
+      selectedNodeId: null,
+      expandedNodeIds: [],
+      characters: {},
+      shotsByScene: {},
+      breakdownElements: {},
+      snapshots: [],
+      schedules: [],
+      activeScheduleId: null,
+      shootingDays: [],
+      stripboardItems: [],
+      notesByNode: {},
+      takesByShot: {},
+      adrCues: {},
+      audioCuesByScene: {},
+      budgets: [],
+      activeBudgetId: null,
+      milestones: [],
+      activityLogs: [],
+      coverageReports: [],
+      lastEditedLocally: {},
+      nodeVersions: {},
+      isLoading: true,
+      error: null,
+      lastError: null,
+    });
+
+    await get().loadWorkspace(slug);
+  },
+
+  applyRemoteNodeMutation: (remoteData: Partial<WorkspaceNode> & { id: string; client_version?: number }) => {
+    const nodeId = remoteData.id;
+    if (!nodeId) return;
+
+    const { nodes, nodeVersions } = get();
+    const existing = nodes[nodeId];
+    if (!existing) {
+      if (remoteData.title && remoteData.type) {
+        set({
+          nodes: {
+            ...nodes,
+            [nodeId]: remoteData as WorkspaceNode,
+          },
+        });
+      }
+      return;
+    }
+
+    const isContentDebouncing = Boolean(debounceTimers[nodeId]);
+    const isTitleDebouncing = Boolean(debounceTimers[`${nodeId}-title`]);
+
+    const currentVersion = nodeVersions[nodeId] || 0;
+    if (remoteData.client_version !== undefined && remoteData.client_version < currentVersion) {
+      return;
+    }
+
+    const merged: WorkspaceNode = {
+      ...existing,
+      ...remoteData,
+    };
+
+    if (isContentDebouncing) {
+      merged.content = existing.content;
+    }
+    if (isTitleDebouncing) {
+      merged.title = existing.title;
+    }
+
+    set({
+      nodes: {
+        ...get().nodes,
+        [nodeId]: merged,
+      },
+    });
+  },
+
+  isNodeDebouncing: (nodeId: string) => {
+    return Boolean(debounceTimers[nodeId] || debounceTimers[`${nodeId}-title`]);
+  },
 
   loadWorkspace: async (slug: string) => {
     set({ isLoading: true, error: null });
@@ -638,16 +739,27 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     content: string,
     extraFields?: Partial<WorkspaceNode>
   ) => {
-    const { nodes } = get();
+    const { nodes, nodeVersions, lastEditedLocally } = get();
     const existing = nodes[nodeId];
     if (!existing) return;
     const previous = { ...existing };
 
-    // Optimistically update
+    const now = Date.now();
+    const nextVersion = (nodeVersions[nodeId] || 0) + 1;
+
+    // Optimistically update local text field and version counter
     set({
       nodes: {
         ...nodes,
         [nodeId]: { ...existing, content, ...(extraFields || {}) },
+      },
+      lastEditedLocally: {
+        ...lastEditedLocally,
+        [nodeId]: now,
+      },
+      nodeVersions: {
+        ...nodeVersions,
+        [nodeId]: nextVersion,
       },
       saveStatus: 'saving',
     });
@@ -657,6 +769,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
 
     debounceTimers[nodeId] = setTimeout(async () => {
+      delete debounceTimers[nodeId];
       try {
         await updateNode(nodeId, { content, ...(extraFields || {}) });
         set({ saveStatus: 'saved' });
@@ -683,24 +796,37 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   updateNodeTitle: (nodeId: string, title: string) => {
-    const { nodes } = get();
+    const { nodes, nodeVersions, lastEditedLocally } = get();
     const existing = nodes[nodeId];
     if (!existing) return;
     const previousTitle = existing.title;
+
+    const now = Date.now();
+    const timerKey = `${nodeId}-title`;
+    const nextVersion = (nodeVersions[nodeId] || 0) + 1;
 
     set({
       nodes: {
         ...nodes,
         [nodeId]: { ...existing, title },
       },
+      lastEditedLocally: {
+        ...lastEditedLocally,
+        [timerKey]: now,
+      },
+      nodeVersions: {
+        ...nodeVersions,
+        [nodeId]: nextVersion,
+      },
       saveStatus: 'saving',
     });
 
-    if (debounceTimers[`${nodeId}-title`]) {
-      clearTimeout(debounceTimers[`${nodeId}-title`]);
+    if (debounceTimers[timerKey]) {
+      clearTimeout(debounceTimers[timerKey]);
     }
 
-    debounceTimers[`${nodeId}-title`] = setTimeout(async () => {
+    debounceTimers[timerKey] = setTimeout(async () => {
+      delete debounceTimers[timerKey];
       try {
         await updateNode(nodeId, { title });
         set({ saveStatus: 'saved' });

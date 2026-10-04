@@ -8,7 +8,7 @@ import { CommandPalette } from './navigation/CommandPalette';
 import { TeamManagementModal } from './team/TeamManagementModal';
 import { StudioActivityDrawer } from './activity/StudioActivityDrawer';
 import { AlertCircle, RefreshCw, X, Shield, Users, Activity } from 'lucide-react';
-import { WorkspaceRole } from '@/types/workspace';
+import { WorkspaceRole, WorkspaceNode } from '@/types/workspace';
 import { createWorkspaceSocket, WorkspaceSocketClient } from '@/lib/websocket';
 
 interface WorkspaceShellProps {
@@ -61,6 +61,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     selectedNodeId,
     selectNode,
     nodes,
+    applyRemoteNodeMutation,
   } = useWorkspaceStore();
 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
@@ -97,6 +98,13 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
         if (event.user_id) {
           removeCollaborator(event.user_id);
         }
+      } else if (event.action === 'broadcast_mutation') {
+        if (!event.is_self && event.payload) {
+          const payload = event.payload as Partial<WorkspaceNode> & { id: string };
+          if (payload && payload.id) {
+            applyRemoteNodeMutation(payload);
+          }
+        }
       }
     });
 
@@ -131,6 +139,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     selectedNodeId,
     updateCollaboratorPresence,
     removeCollaborator,
+    applyRemoteNodeMutation,
   ]);
 
   // Auto-dismiss lastError after 6 seconds

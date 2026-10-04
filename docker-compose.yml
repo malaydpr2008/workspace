@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:16-alpine
@@ -21,6 +19,15 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: workspace-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - workspace-net
+
   backend:
     build:
       context: ./backend
@@ -33,13 +40,19 @@ services:
       - PYTHONUNBUFFERED=1
       - DJANGO_SETTINGS_MODULE=config.settings
       - DATABASE_URL=postgres://postgres:postgrespassword@db:5432/workspace_db
+      - REDIS_HOST=redis
+      - REDIS_URL=redis://redis:6379/0
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend,[::1],*
       - DEBUG=1
     networks:
       - workspace-net
+    volumes:
+      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/api/\")'"]
       interval: 5s

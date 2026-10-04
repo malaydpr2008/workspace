@@ -1,4 +1,5 @@
 from django.urls import reverse
+from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.test import APITestCase
 from core.models import (
@@ -30,6 +31,15 @@ from core.permissions import RolePermissionPolicy
 class WorkspaceNodeAPITests(APITestCase):
     def setUp(self):
         self.workspace = Workspace.objects.create(name="Film Project", slug="film-project")
+        self.user = User.objects.create_user(username="api_owner", email="owner@filmproject.com", password="password")
+        WorkspaceMembership.objects.create(
+            workspace=self.workspace,
+            user=self.user,
+            email=self.user.email,
+            name="API Owner",
+            role="OWNER",
+        )
+        self.client.force_authenticate(user=self.user)
         self.root_node = WorkspaceNode.objects.create(
             workspace=self.workspace,
             type="screenplay",
@@ -1116,6 +1126,15 @@ class StudioActivityLogAndWebSocketAPITests(APITestCase):
 class StudioAIEngineAndCoverageAPITests(APITestCase):
     def setUp(self):
         self.workspace = Workspace.objects.create(name="AI Studio", slug="ai-studio")
+        self.user = User.objects.create_user(username="ai_owner", email="owner@aistudio.com", password="password")
+        WorkspaceMembership.objects.create(
+            workspace=self.workspace,
+            user=self.user,
+            email=self.user.email,
+            name="AI Owner",
+            role="OWNER",
+        )
+        self.client.force_authenticate(user=self.user)
         self.screenplay = WorkspaceNode.objects.create(
             workspace=self.workspace,
             type="screenplay",

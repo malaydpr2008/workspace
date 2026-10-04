@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import permissions, exceptions
 from core.models import WorkspaceMembership, Workspace
 
@@ -59,13 +60,14 @@ def get_user_workspace_role(request, workspace_id=None, obj=None) -> str:
     Resolves the user's role in the given workspace.
     Priority:
     1. If request.user is authenticated, query active WorkspaceMembership.
-    2. Header 'X-Workspace-Role' / request.META['HTTP_X_WORKSPACE_ROLE'].
-    3. Query parameter 'role'.
-    4. Header 'X-User-Email'.
-    5. Fallback: 'OWNER' (open studio default for administration / unauthenticated local access).
+    2. When settings.DEBUG is True:
+       - Header 'X-Workspace-Role' / request.META['HTTP_X_WORKSPACE_ROLE']
+       - Query parameter 'role'
+       - Header 'X-User-Email' / request.META['HTTP_X_USER_EMAIL']
+    3. Fallback: 'ACTOR' (read-only safe methods for unauthenticated callers).
     """
     if not request:
-        return "OWNER"
+        return "ACTOR"
 
     # Extract workspace_id if not explicitly provided
     if not workspace_id:
@@ -78,12 +80,15 @@ def get_user_workspace_role(request, workspace_id=None, obj=None) -> str:
                 workspace_id = obj.id
 
     if not workspace_id:
-        workspace_id = (
-            request.data.get("workspace")
-            or request.data.get("workspace_id")
-            or request.query_params.get("workspace")
-            or request.query_params.get("workspace_id")
-        )
+        try:
+            workspace_id = (
+                (request.data.get("workspace") if hasattr(request, "data") and isinstance(request.data, dict) else None)
+                or (request.data.get("workspace_id") if hasattr(request, "data") and isinstance(request.data, dict) else None)
+                or (request.query_params.get("workspace") if hasattr(request, "query_params") else None)
+                or (request.query_params.get("workspace_id") if hasattr(request, "query_params") else None)
+            )
+        except Exception:
+            pass
 
     # 1. Check authenticated user's active membership
     user = getattr(request, "user", None)
@@ -113,27 +118,35 @@ def get_user_workspace_role(request, workspace_id=None, obj=None) -> str:
             if m_email:
                 return m_email.role.upper()
 
-    # 2. Check explicit role headers / query params (used by dev client perspective & test suites)
-    header_role = request.headers.get("X-Workspace-Role") or request.META.get("HTTP_X_WORKSPACE_ROLE")
-    if header_role:
-        return header_role.strip().upper()
+    # 2. In debug mode only (settings.DEBUG=True), allow explicit role headers / query params
+    if getattr(settings, "DEBUG", False):
+        header_role = (
+            (request.headers.get("X-Workspace-Role") if hasattr(request, "headers") else None)
+            or (request.META.get("HTTP_X_WORKSPACE_ROLE") if hasattr(request, "META") else None)
+        )
+        if header_role:
+            return header_role.strip().upper()
 
-    param_role = request.query_params.get("role")
-    if param_role:
-        return param_role.strip().upper()
+        if hasattr(request, "query_params"):
+            param_role = request.query_params.get("role")
+            if param_role:
+                return param_role.strip().upper()
 
-    # 3. Check X-User-Email header
-    email_header = request.headers.get("X-User-Email") or request.META.get("HTTP_X_USER_EMAIL")
-    if email_header:
-        qs = WorkspaceMembership.objects.filter(email__iexact=email_header.strip(), is_active=True)
-        if workspace_id:
-            qs = qs.filter(workspace_id=workspace_id)
-        m = qs.first()
-        if m:
-            return m.role.upper()
+        # 3. Check X-User-Email header
+        email_header = (
+            (request.headers.get("X-User-Email") if hasattr(request, "headers") else None)
+            or (request.META.get("HTTP_X_USER_EMAIL") if hasattr(request, "META") else None)
+        )
+        if email_header:
+            qs = WorkspaceMembership.objects.filter(email__iexact=email_header.strip(), is_active=True)
+            if workspace_id:
+                qs = qs.filter(workspace_id=workspace_id)
+            m = qs.first()
+            if m:
+                return m.role.upper()
 
-    # Default fallback for unauthenticated studio access
-    return "OWNER"
+    # Default fallback for unauthenticated callers or callers without active membership:
+    return "ACTOR"
 
 
 class HasWorkspaceRole(permissions.BasePermission):
@@ -232,7 +245,8 @@ class CanModifyNode(permissions.BasePermission):
 class IsAuthenticatedOrReadOnly(permissions.BasePermission):
     """
     Allows read-only access for safe HTTP methods.
-    Allows authenticated users or open studio fallback for mutations.
+    Enforces authentication for state mutations in production,
+    allowing debug headers strictly when DEBUG=True.
     """
 
     def has_permission(self, request, view):
@@ -240,4 +254,7 @@ class IsAuthenticatedOrReadOnly(permissions.BasePermission):
             return True
         if request.user and request.user.is_authenticated:
             return True
-        return True
+        if getattr(settings, "DEBUG", False):
+            role = get_user_workspace_role(request)
+            return role not in ("ACTOR", "DEPT_HEAD")
+        return False

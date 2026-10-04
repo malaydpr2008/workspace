@@ -73,23 +73,25 @@ class WorkspaceNodeViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        # Check if the node itself or any descendant in its recursive subtree is locked
+        # Collect instance.id and all descendant IDs in its recursive subtree
         try:
-            sql = """
+            sql_all = """
             WITH RECURSIVE node_tree AS (
                 SELECT id, is_locked FROM core_workspacenode WHERE id = %s
                 UNION ALL
                 SELECT c.id, c.is_locked FROM core_workspacenode c
                 INNER JOIN node_tree p ON c.parent_id = p.id
             )
-            SELECT id, is_locked FROM node_tree WHERE is_locked = TRUE;
+            SELECT id, is_locked FROM node_tree;
             """
-            locked_nodes = list(WorkspaceNode.objects.raw(sql, [str(instance.id)]))
-            has_locked = len(locked_nodes) > 0
+            tree_nodes = list(WorkspaceNode.objects.raw(sql_all, [str(instance.id)]))
+            subtree_ids = [n.id for n in tree_nodes]
+            has_locked = any(n.is_locked for n in tree_nodes)
         except Exception:
+            subtree_ids = [instance.id]
             queue = [instance.id]
             has_locked = getattr(instance, "is_locked", False)
-            while queue and not has_locked:
+            while queue:
                 curr_id = queue.pop(0)
                 children = list(
                     WorkspaceNode.objects.filter(parent_id=curr_id).values_list("id", "is_locked")
@@ -97,16 +99,38 @@ class WorkspaceNodeViewSet(viewsets.ModelViewSet):
                 for cid, is_locked in children:
                     if is_locked:
                         has_locked = True
-                        break
+                    subtree_ids.append(cid)
                     queue.append(cid)
 
+        # 1. Reject deletion if node or any descendant is revision-locked
         if has_locked:
             return Response(
                 {"detail": "Cannot delete node containing locked items in its hierarchy."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        return super().destroy(request, *args, **kwargs)
+        # 2. Check for active StripboardItem assignments to scheduled shooting days
+        scheduled_strips = StripboardItem.objects.filter(
+            scene_id__in=subtree_ids,
+            shooting_day__isnull=False,
+        ).exists()
+        if scheduled_strips:
+            return Response(
+                {"detail": "Cannot delete scene currently assigned to an active shooting day. Remove it from the stripboard schedule first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 3. Cleanly decouple/cascade satellite entities before node deletion
+        with transaction.atomic():
+            ShotBlockCoverage.objects.filter(
+                Q(block_id__in=subtree_ids) | Q(shot__scene_id__in=subtree_ids)
+            ).delete()
+            ScriptNote.objects.filter(node_id__in=subtree_ids).delete()
+            StripboardItem.objects.filter(
+                scene_id__in=subtree_ids, shooting_day__isnull=True
+            ).update(scene=None)
+
+            return super().destroy(request, *args, **kwargs)
 
     def get_queryset(self):
         queryset = super().get_queryset()

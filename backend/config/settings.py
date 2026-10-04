@@ -80,14 +80,25 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
-REDIS_URL = os.environ.get('REDIS_URL', '')
+import sys
 
-if REDIS_URL:
+REDIS_HOST = os.environ.get('REDIS_HOST', '')
+REDIS_URL = os.environ.get('REDIS_URL', f'redis://{REDIS_HOST}:6379/0' if REDIS_HOST else '')
+
+# Use in-memory channel layer during unit test execution or when Redis is not available
+if 'test' in sys.argv or any('test' in arg for arg in sys.argv):
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        }
+    }
+elif REDIS_URL or REDIS_HOST:
+    target_redis = REDIS_URL or f"redis://{REDIS_HOST}:6379/0"
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
-                "hosts": [REDIS_URL],
+                "hosts": [target_redis],
             },
         },
     }
