@@ -52,6 +52,7 @@ from core.serializers import (
     ScriptCoverageReportSerializer,
 )
 from core.permissions import (
+    IsSoloCreator,
     RolePermissionPolicy,
     HasWorkspaceRole,
     CanModifyNode,
@@ -63,12 +64,13 @@ from core.permissions import (
 class WorkspaceViewSet(viewsets.ModelViewSet):
     queryset = Workspace.objects.all()
     serializer_class = WorkspaceSerializer
+    permission_classes = [IsSoloCreator]
 
 
 class WorkspaceNodeViewSet(viewsets.ModelViewSet):
     queryset = WorkspaceNode.objects.all()
     serializer_class = WorkspaceNodeSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly, HasWorkspaceRole, CanModifyNode]
+    permission_classes = [IsSoloCreator]
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -250,6 +252,7 @@ class WorkspaceNodeViewSet(viewsets.ModelViewSet):
 class CharacterViewSet(viewsets.ModelViewSet):
     queryset = Character.objects.all()
     serializer_class = CharacterSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -262,6 +265,7 @@ class CharacterViewSet(viewsets.ModelViewSet):
 class ShotViewSet(viewsets.ModelViewSet):
     queryset = Shot.objects.all().prefetch_related("blocks")
     serializer_class = ShotSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -299,11 +303,13 @@ class ShotViewSet(viewsets.ModelViewSet):
 class ShotBlockCoverageViewSet(viewsets.ModelViewSet):
     queryset = ShotBlockCoverage.objects.all()
     serializer_class = ShotBlockCoverageSerializer
+    permission_classes = [IsSoloCreator]
 
 
 class BreakdownElementViewSet(viewsets.ModelViewSet):
     queryset = BreakdownElement.objects.all().prefetch_related("blocks")
     serializer_class = BreakdownElementSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -319,6 +325,7 @@ class BreakdownElementViewSet(viewsets.ModelViewSet):
 class DocumentSnapshotViewSet(viewsets.ModelViewSet):
     queryset = DocumentSnapshot.objects.all().order_by("-created_at")
     serializer_class = DocumentSnapshotSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -401,6 +408,7 @@ class DocumentSnapshotViewSet(viewsets.ModelViewSet):
 class ShootingScheduleViewSet(viewsets.ModelViewSet):
     queryset = ShootingSchedule.objects.all()
     serializer_class = ShootingScheduleSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -416,6 +424,7 @@ class ShootingScheduleViewSet(viewsets.ModelViewSet):
 class ShootingDayViewSet(viewsets.ModelViewSet):
     queryset = ShootingDay.objects.all()
     serializer_class = ShootingDaySerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -428,6 +437,7 @@ class ShootingDayViewSet(viewsets.ModelViewSet):
 class StripboardItemViewSet(viewsets.ModelViewSet):
     queryset = StripboardItem.objects.all()
     serializer_class = StripboardItemSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -476,6 +486,7 @@ class StripboardItemViewSet(viewsets.ModelViewSet):
 class ScriptNoteViewSet(viewsets.ModelViewSet):
     queryset = ScriptNote.objects.all()
     serializer_class = ScriptNoteSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -515,6 +526,7 @@ class ScriptNoteViewSet(viewsets.ModelViewSet):
 class ProductionTakeViewSet(viewsets.ModelViewSet):
     queryset = ProductionTake.objects.all()
     serializer_class = ProductionTakeSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -535,6 +547,7 @@ class ADRCueViewSet(viewsets.ModelViewSet):
     queryset = ADRCue.objects.all().select_related("character", "dialogue_node", "dialogue_node__parent").order_by("cue_number", "created_at")
     serializer_class = ADRCueSerializer
     parser_classes = [JSONParser, MultiPartParser, FormParser]
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -566,6 +579,7 @@ class ADRCueViewSet(viewsets.ModelViewSet):
 class AudioSpottingCueViewSet(viewsets.ModelViewSet):
     queryset = AudioSpottingCue.objects.all().select_related("scene").order_by("created_at")
     serializer_class = AudioSpottingCueSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -584,6 +598,7 @@ class AudioSpottingCueViewSet(viewsets.ModelViewSet):
 class ProductionBudgetViewSet(viewsets.ModelViewSet):
     queryset = ProductionBudget.objects.all().prefetch_related("categories__line_items")
     serializer_class = ProductionBudgetSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -858,6 +873,7 @@ class ProductionBudgetViewSet(viewsets.ModelViewSet):
 class BudgetCategoryViewSet(viewsets.ModelViewSet):
     queryset = BudgetCategory.objects.all().prefetch_related("line_items")
     serializer_class = BudgetCategorySerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -873,6 +889,7 @@ class BudgetCategoryViewSet(viewsets.ModelViewSet):
 class BudgetLineItemViewSet(viewsets.ModelViewSet):
     queryset = BudgetLineItem.objects.all()
     serializer_class = BudgetLineItemSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -888,6 +905,7 @@ class BudgetLineItemViewSet(viewsets.ModelViewSet):
 class ProductionMilestoneViewSet(viewsets.ModelViewSet):
     queryset = ProductionMilestone.objects.all()
     serializer_class = ProductionMilestoneSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -1025,6 +1043,7 @@ class ProductionMilestoneViewSet(viewsets.ModelViewSet):
 class WorkspaceMembershipViewSet(viewsets.ModelViewSet):
     queryset = WorkspaceMembership.objects.all().select_related("workspace", "user")
     serializer_class = WorkspaceMembershipSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -1073,6 +1092,7 @@ class WorkspaceMembershipViewSet(viewsets.ModelViewSet):
 class StudioActivityLogViewSet(viewsets.ModelViewSet):
     queryset = StudioActivityLog.objects.all().select_related("workspace", "target_node")
     serializer_class = StudioActivityLogSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -1091,6 +1111,7 @@ class StudioActivityLogViewSet(viewsets.ModelViewSet):
 class ScriptCoverageReportViewSet(viewsets.ModelViewSet):
     queryset = ScriptCoverageReport.objects.all().select_related("workspace", "screenplay")
     serializer_class = ScriptCoverageReportSerializer
+    permission_classes = [IsSoloCreator]
 
     def get_queryset(self):
         qs = super().get_queryset()

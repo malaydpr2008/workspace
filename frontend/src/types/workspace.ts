@@ -330,6 +330,10 @@ export interface RoleCapabilities {
   canEditBudget: boolean;
   canLockScenes: boolean;
   canManageMembers: boolean;
+  canManageBudget?: boolean;
+  canManageSchedule?: boolean;
+  canManageTeam?: boolean;
+  canAddNotes?: boolean;
 }
 
 export interface WorkspaceMembership {

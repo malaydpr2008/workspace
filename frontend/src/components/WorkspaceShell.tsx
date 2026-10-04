@@ -15,14 +15,7 @@ interface WorkspaceShellProps {
   slug?: string;
 }
 
-const PERSPECTIVE_ROLES: { role: WorkspaceRole; label: string; icon: string; color: string }[] = [
-  { role: 'OWNER', label: 'Executive', icon: '👑', color: 'text-amber-400' },
-  { role: 'PRODUCER', label: 'Producer', icon: '💼', color: 'text-indigo-400' },
-  { role: 'DIRECTOR', label: 'Director', icon: '🎬', color: 'text-sky-400' },
-  { role: 'WRITER', label: 'Writer', icon: '✍️', color: 'text-emerald-400' },
-  { role: 'DEPT_HEAD', label: 'Dept Head', icon: '🛠️', color: 'text-violet-400' },
-  { role: 'ACTOR', label: 'Actor', icon: '🎭', color: 'text-rose-400' },
-];
+
 
 function getRoleAvatarStyle(role: WorkspaceRole) {
   switch (role) {
@@ -53,7 +46,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     lastError,
     clearLastError,
     currentUserRole,
-    setCurrentUserRole,
     loadCurrentUserRole,
     collaborators,
     updateCollaboratorPresence,
@@ -113,8 +105,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     // Send initial presence
     wsClient.sendPresence({
       userId: localUserIdRef.current,
-      userName: `${currentUserRole} Lead`,
-      userRole: currentUserRole,
+      userName: 'Solo Creator',
+      userRole: currentUserRole || 'OWNER',
       focusedBlockId: selectedNodeId,
     });
 
@@ -122,8 +114,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     const presenceTimer = setInterval(() => {
       wsClient.sendPresence({
         userId: localUserIdRef.current,
-        userName: `${currentUserRole} Lead`,
-        userRole: currentUserRole,
+        userName: 'Solo Creator',
+        userRole: currentUserRole || 'OWNER',
         focusedBlockId: selectedNodeId,
       });
     }, 15000);
@@ -197,29 +189,12 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
 
       {/* Central Canvas with Polymorphic Node Dispatcher */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950">
-        {/* Top Header Bar with Role Switcher Perspective & Real-Time Presence */}
+        {/* Top Header Bar with Solo Studio Badge & Real-Time Presence */}
         <div className="h-9 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-4 flex items-center justify-between shrink-0 no-print z-20">
           <div className="flex items-center space-x-3 text-xs font-mono">
-            <div className="flex items-center space-x-1.5 text-slate-400">
-              <Shield className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Role:</span>
-            </div>
-            <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
-              {PERSPECTIVE_ROLES.map(({ role, label, icon, color }) => (
-                <button
-                  key={role}
-                  onClick={() => setCurrentUserRole(role)}
-                  className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono transition-all ${
-                    currentUserRole === role
-                      ? 'bg-slate-800 text-white font-bold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  title={`Preview workspace as ${label}`}
-                >
-                  <span>{icon}</span>
-                  <span className={currentUserRole === role ? color : ''}>{label}</span>
-                </button>
-              ))}
+            <div className="flex items-center space-x-1.5 px-2.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300">
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+              <span className="font-semibold tracking-wide">Studio Solo Mode</span>
             </div>
 
             {/* Collaborator Live Presence Avatars */}

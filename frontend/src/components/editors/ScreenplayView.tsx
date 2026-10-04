@@ -25,7 +25,6 @@ import {
   Music,
   DollarSign,
   LayoutDashboard,
-  Lock,
   Users,
   Activity,
   Sparkles,
@@ -191,8 +190,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
     }
   }, [activeSceneId, loadSceneShots, loadAudioCuesForScene, loadNodeChildren, childrenMap]);
 
-  const effectiveViewMode =
-    viewMode === 'budget' && !currentCapabilities.canEditBudget ? 'editor' : viewMode;
+  const effectiveViewMode = viewMode;
 
   const currentScene = nodes[activeSceneId] || (isScene ? node : null);
   const sceneBlocks = currentScene
@@ -641,27 +639,17 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
               <Mic className="w-3.5 h-3.5" />
               <span>ADR Sheet</span>
             </button>
-            {currentCapabilities.canEditBudget ? (
-              <button
-                onClick={() => setViewMode('budget')}
-                className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
-                  effectiveViewMode === 'budget'
-                    ? 'bg-emerald-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <DollarSign className="w-3.5 h-3.5" />
-                <span>Budget</span>
-              </button>
-            ) : (
-              <div
-                className="flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-mono text-slate-600 cursor-not-allowed select-none"
-                title="Permission Locked: Budget Ledger restricted to Producers and Studio Owners."
-              >
-                <Lock className="w-3 h-3 text-slate-600" />
-                <span className="line-through">Budget</span>
-              </div>
-            )}
+            <button
+              onClick={() => setViewMode('budget')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
+                effectiveViewMode === 'budget'
+                  ? 'bg-emerald-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <DollarSign className="w-3.5 h-3.5" />
+              <span>Budget</span>
+            </button>
           </div>
 
           {/* Team Members & Roles Button */}
@@ -792,24 +780,7 @@ export const ScreenplayView: React.FC<ScreenplayViewProps> = ({ node }) => {
         </div>
       </div>
 
-      {/* Actor Role Notification Banner */}
-      {currentUserRole === 'ACTOR' && (
-        <div className="bg-rose-500/10 border-b border-rose-500/20 px-6 py-2 flex items-center justify-between text-xs font-mono text-rose-300 shrink-0 no-print">
-          <div className="flex items-center space-x-2">
-            <User className="w-4 h-4 text-rose-400" />
-            <span>
-              <strong>Actor Portal Active:</strong> Canvas is restricted to actor sides and read-only character dialogue.
-            </span>
-          </div>
-          <button
-            onClick={() => setIsSidesModalOpen(true)}
-            className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 text-xs font-semibold flex items-center space-x-1.5 transition-colors"
-          >
-            <User className="w-3.5 h-3.5" />
-            <span>Open Actor Sides</span>
-          </button>
-        </div>
-      )}
+
 
       {/* Main Content: Overview Dashboard OR Beat Board View OR Shot List OR Breakdown OR Analytics OR Script Editor */}
       {effectiveViewMode === 'overview' ? (

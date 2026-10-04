@@ -277,10 +277,10 @@ export const WorkspaceSidebar: React.FC = () => {
         >
           <div className="flex items-center space-x-2">
             <Users className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-300" />
-            <span>Team & Roles</span>
+            <span>Team & Collaborators</span>
           </div>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
-            RBAC
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+            Solo
           </span>
         </button>
       </div>

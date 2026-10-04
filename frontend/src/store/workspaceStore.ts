@@ -102,46 +102,20 @@ import {
   generateCoverageReport,
 } from '@/lib/api';
 
-export function getRoleCapabilities(role: WorkspaceRole): RoleCapabilities {
-  switch (role) {
-    case 'OWNER':
-    case 'PRODUCER':
-      return {
-        canEditScript: true,
-        canEditBudget: true,
-        canLockScenes: true,
-        canManageMembers: true,
-      };
-    case 'DIRECTOR':
-      return {
-        canEditScript: true,
-        canEditBudget: false,
-        canLockScenes: true,
-        canManageMembers: false,
-      };
-    case 'WRITER':
-      return {
-        canEditScript: true,
-        canEditBudget: false,
-        canLockScenes: false,
-        canManageMembers: false,
-      };
-    case 'DEPT_HEAD':
-    case 'ACTOR':
-      return {
-        canEditScript: false,
-        canEditBudget: false,
-        canLockScenes: false,
-        canManageMembers: false,
-      };
-    default:
-      return {
-        canEditScript: true,
-        canEditBudget: true,
-        canLockScenes: true,
-        canManageMembers: true,
-      };
-  }
+export const getSoloCapabilities = (): RoleCapabilities => ({
+  canEditScript: true,
+  canLockScenes: true,
+  canManageBudget: true,
+  canManageSchedule: true,
+  canManageTeam: true,
+  canAddNotes: true,
+  canEditBudget: true,
+  canManageMembers: true,
+});
+
+export function getRoleCapabilities(role?: WorkspaceRole): RoleCapabilities {
+  void role;
+  return getSoloCapabilities();
 }
 
 const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -401,12 +375,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activityLogs: [],
   coverageReports: [],
   currentUserRole: 'OWNER',
-  currentCapabilities: {
-    canEditScript: true,
-    canEditBudget: true,
-    canLockScenes: true,
-    canManageMembers: true,
-  },
+  currentCapabilities: getSoloCapabilities(),
   lastEditedLocally: {},
   nodeVersions: {},
   isLoading: false,
@@ -2100,7 +2069,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setCurrentUserRole: (role: WorkspaceRole) => {
     set({
       currentUserRole: role,
-      currentCapabilities: getRoleCapabilities(role),
+      currentCapabilities: getSoloCapabilities(),
     });
   },
 
@@ -2108,11 +2077,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     try {
       const result = await fetchCurrentUserRole(workspaceId, email);
       set({
-        currentUserRole: result.role,
-        currentCapabilities: result.capabilities,
+        currentUserRole: result.role || 'OWNER',
+        currentCapabilities: getSoloCapabilities(),
       });
     } catch (err) {
       console.error('Failed to load current user role', err);
+      set({
+        currentUserRole: 'OWNER',
+        currentCapabilities: getSoloCapabilities(),
+      });
     }
   },
 

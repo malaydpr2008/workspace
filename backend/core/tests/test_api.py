@@ -890,41 +890,15 @@ class WorkspaceMembershipAndRBACAPITests(APITestCase):
         self.other_workspace = Workspace.objects.create(name="Indie Lab", slug="indie-lab")
 
     def test_role_permission_policy_capabilities(self):
-        # 1. OWNER
-        self.assertTrue(RolePermissionPolicy.can_edit_script("OWNER"))
-        self.assertTrue(RolePermissionPolicy.can_edit_budget("OWNER"))
-        self.assertTrue(RolePermissionPolicy.can_lock_scenes("OWNER"))
-        self.assertTrue(RolePermissionPolicy.can_manage_members("OWNER"))
-
-        # 2. PRODUCER
-        self.assertTrue(RolePermissionPolicy.can_edit_script("PRODUCER"))
-        self.assertTrue(RolePermissionPolicy.can_edit_budget("PRODUCER"))
-        self.assertTrue(RolePermissionPolicy.can_lock_scenes("PRODUCER"))
-        self.assertTrue(RolePermissionPolicy.can_manage_members("PRODUCER"))
-
-        # 3. DIRECTOR
-        self.assertTrue(RolePermissionPolicy.can_edit_script("DIRECTOR"))
-        self.assertFalse(RolePermissionPolicy.can_edit_budget("DIRECTOR"))
-        self.assertTrue(RolePermissionPolicy.can_lock_scenes("DIRECTOR"))
-        self.assertFalse(RolePermissionPolicy.can_manage_members("DIRECTOR"))
-
-        # 4. WRITER
-        self.assertTrue(RolePermissionPolicy.can_edit_script("WRITER"))
-        self.assertFalse(RolePermissionPolicy.can_edit_budget("WRITER"))
-        self.assertFalse(RolePermissionPolicy.can_lock_scenes("WRITER"))
-        self.assertFalse(RolePermissionPolicy.can_manage_members("WRITER"))
-
-        # 5. DEPT_HEAD
-        self.assertFalse(RolePermissionPolicy.can_edit_script("DEPT_HEAD"))
-        self.assertFalse(RolePermissionPolicy.can_edit_budget("DEPT_HEAD"))
-        self.assertFalse(RolePermissionPolicy.can_lock_scenes("DEPT_HEAD"))
-        self.assertFalse(RolePermissionPolicy.can_manage_members("DEPT_HEAD"))
-
-        # 6. ACTOR
-        self.assertFalse(RolePermissionPolicy.can_edit_script("ACTOR"))
-        self.assertFalse(RolePermissionPolicy.can_edit_budget("ACTOR"))
-        self.assertFalse(RolePermissionPolicy.can_lock_scenes("ACTOR"))
-        self.assertFalse(RolePermissionPolicy.can_manage_members("ACTOR"))
+        """In solo creator mode, all studio capabilities are enabled across all roles."""
+        roles = ["OWNER", "PRODUCER", "DIRECTOR", "WRITER", "DEPT_HEAD", "ACTOR"]
+        for role in roles:
+            self.assertTrue(RolePermissionPolicy.can_edit_script(role))
+            self.assertTrue(RolePermissionPolicy.can_edit_budget(role))
+            self.assertTrue(RolePermissionPolicy.can_lock_scenes(role))
+            self.assertTrue(RolePermissionPolicy.can_manage_members(role))
+            caps = RolePermissionPolicy.get_capabilities(role)
+            self.assertTrue(all(caps.values()))
 
     def test_membership_crud_and_duplicate_rejection(self):
         url = reverse("workspacemembership-list")
@@ -946,7 +920,7 @@ class WorkspaceMembershipAndRBACAPITests(APITestCase):
         self.assertEqual(resp.data["role"], "DIRECTOR")
         self.assertTrue(resp.data["capabilities"]["can_edit_script"])
         self.assertTrue(resp.data["capabilities"]["can_lock_scenes"])
-        self.assertFalse(resp.data["capabilities"]["can_edit_budget"])
+        self.assertTrue(resp.data["capabilities"]["can_edit_budget"])
 
         # 2. Reject duplicate email in same workspace
         dup_resp = self.client.post(
@@ -998,12 +972,12 @@ class WorkspaceMembershipAndRBACAPITests(APITestCase):
             department="CAST",
         )
 
-        # Fetch role by email
+        # Fetch role by email - in solo mode, actor role retains full studio capabilities
         resp = self.client.get(f"{url}?workspace={self.workspace.id}&email=cillian@peaky.com")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["role"], "ACTOR")
-        self.assertFalse(resp.data["capabilities"]["can_edit_script"])
-        self.assertFalse(resp.data["capabilities"]["can_edit_budget"])
+        self.assertTrue(resp.data["capabilities"]["can_edit_script"])
+        self.assertTrue(resp.data["capabilities"]["can_edit_budget"])
 
         # Fetch for unknown email defaults to OWNER fallback
         resp2 = self.client.get(f"{url}?workspace={self.workspace.id}&email=unknown@studio.com")
